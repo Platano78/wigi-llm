@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "layout": {
+    "type": "dynamic",
+    "maxColumns": 4,
+    "buttonSpacing": 8,
+    "buttonPadding": 4
+  },
+  "buttons": [
+    {
+      "id": "kill",
+      "displayName": "KILL ALL",
+      "scriptPath": "wsl --exec /home/YOUR_USER/scripts/kill-all-llm.sh",
+      "port": -1,
+      "expectedModel": "",
+      "serverType": "Kill",
+      "icons": {
+        "active": "icon_kill_active.png",
+        "inactive": "icon_kill_off.png"
+      }
+    },
+    {
+      "id": "router",
+      "displayName": "Router ON",
+      "scriptPath": "wsl --exec /home/YOUR_USER/scripts/start-router.sh start",
+      "port": 8081,
+      "expectedModel": "",
+      "serverType": "LlamaCpp",
+      "icons": {
+        "active": "icon_router_active.png",
+        "inactive": "icon_router_off.png"
+      }
+    },
+    {
+      "id": "model-a",
+      "displayName": "Model A",
+      "scriptPath": "wsl --exec /home/YOUR_USER/scripts/router-control.sh switch model-a",
+      "port": 8081,
+      "expectedModel": "model-a",
+      "serverType": "LlamaCpp",
+      "radioGroup": 1,
+      "icons": {
+        "active": "icon_model_a_active.png",
+        "inactive": "icon_model_a_off.png"
+      }
+    },
+    {
+      "id": "model-b",
+      "displayName": "Model B",
+      "scriptPath": "wsl --exec /home/YOUR_USER/scripts/router-control.sh switch model-b",
+      "port": 8081,
+      "expectedModel": "model-b",
+      "serverType": "LlamaCpp",
+      "radioGroup": 1,
+      "icons": {
+        "active": "icon_model_b_active.png",
+        "inactive": "icon_model_b_off.png"
+      }
+    }
+  ]
+}
