@@ -1,0 +1,81 @@
+<UserControl x:Class="LLMRouterStatusWidget.SettingsUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="350" d:DesignWidth="350">
+    <StackPanel Margin="15" Background="#1E1E1E">
+        <Label Content="LLM Router Status Settings" FontWeight="Bold" FontSize="14" Foreground="White" Margin="0,0,0,10"/>
+
+        <Border BorderBrush="#404040" BorderThickness="0,0,0,1" Margin="0,0,0,15"/>
+
+        <!-- Router URL -->
+        <Grid Margin="0,0,0,15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Label Content="Router URL:" Foreground="#B0B0B0" VerticalAlignment="Center"/>
+            <TextBox x:Name="RouterUrlBox" Grid.Column="1" TextChanged="RouterUrlBox_TextChanged"
+                     Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46" Padding="5"/>
+        </Grid>
+
+        <!-- Polling Intervals -->
+        <Label Content="Polling Intervals (ms)" FontWeight="Bold" Foreground="White" Margin="0,5,0,5"/>
+
+        <Grid Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Label Content="Active:" Foreground="#B0B0B0" VerticalAlignment="Center"/>
+            <TextBox x:Name="PollingActiveBox" Grid.Column="1" TextChanged="PollingActiveBox_TextChanged"
+                     Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46" Padding="5"/>
+        </Grid>
+
+        <Grid Margin="0,0,0,15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Label Content="Idle:" Foreground="#B0B0B0" VerticalAlignment="Center"/>
+            <TextBox x:Name="PollingIdleBox" Grid.Column="1" TextChanged="PollingIdleBox_TextChanged"
+                     Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46" Padding="5"/>
+        </Grid>
+
+        <!-- Info text -->
+        <TextBlock TextWrapping="Wrap" Foreground="#808080" FontSize="10" Margin="0,0,0,15">
+            Active polling is used during loading/switching. Idle polling is used when model is ready or idle.
+        </TextBlock>
+
+        <!-- Expected API format -->
+        <Label Content="Expected API Response:" FontWeight="Bold" Foreground="White" Margin="0,10,0,5"/>
+        <Border Background="#2D2D30" BorderBrush="#3F3F46" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+            <TextBlock FontFamily="Consolas" FontSize="10" Foreground="#B0B0B0" TextWrapping="Wrap">
+{
+  "model": "coding-reap25b",
+  "state": "loading",
+  "progress": 60,
+  "vram_used_mb": 9420,
+  "vram_total_mb": 16384,
+  "pending_requests": 1,
+  "last_switch_seconds": 12
+}
+            </TextBlock>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="Test Connection" Click="TestConnection_Click" Margin="0,0,10,0"
+                    Background="#0E639C" Foreground="White" BorderThickness="0" Padding="15,8"
+                    Cursor="Hand"/>
+            <Button Content="Apply Settings" Click="Apply_Click"
+                    Background="#0E639C" Foreground="White" BorderThickness="0" Padding="15,8"
+                    Cursor="Hand"/>
+        </StackPanel>
+
+        <!-- Status message -->
+        <TextBlock x:Name="StatusMessage" Margin="0,10,0,0" Foreground="#4EC9B0" FontSize="10" TextWrapping="Wrap"/>
+    </StackPanel>
+</UserControl>
