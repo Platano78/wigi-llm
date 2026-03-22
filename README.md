@@ -1,8 +1,8 @@
-# LLM Deck
+# Wigi-LLM
 
-LLM Deck is a physical control surface integration for managing local large language models. It turns a G.SKILL WigiDash touchscreen panel (or an Elgato StreamDeck) into a dedicated, one-touch hardware switcher for your local AI infrastructure.
+Wigi-LLM is a physical control surface integration for managing local large language models. It turns a G.SKILL WigiDash touchscreen panel (or an Elgato StreamDeck) into a dedicated, one-touch hardware switcher for your local AI infrastructure.
 
-This project was born out of necessity from a real production setup. I run 7+ different local models on a primary workstation with an RTX 5080 16GB, alongside a remote AI-utility machine. Constantly typing terminal commands to unload one model, free up VRAM, and load another became tedious. LLM Deck solves this by providing a tactile, visual interface to manage GPU memory and model routing instantly.
+This project was born out of necessity from a real production setup. I run 7+ different local models on a primary workstation with an RTX 5080 16GB, alongside a remote AI-utility machine. Constantly typing terminal commands to unload one model, free up VRAM, and load another became tedious. Wigi-LLM solves this by providing a tactile, visual interface to manage GPU memory and model routing instantly.
 
 ## Features
 

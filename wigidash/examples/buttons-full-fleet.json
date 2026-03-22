@@ -10,7 +10,7 @@
     {
       "id": "kill",
       "displayName": "KILL",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/kill-all-llm.sh",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/kill-all-llm.sh",
       "port": -1,
       "expectedModel": "",
       "serverType": "Kill",
@@ -22,7 +22,7 @@
     {
       "id": "router",
       "displayName": "Router ON",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/start-router.sh start",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/start-router.sh start",
       "port": 8081,
       "expectedModel": "",
       "serverType": "LlamaCpp",
@@ -60,7 +60,7 @@
     {
       "id": "router-cascade2",
       "displayName": "Cascade 2",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/router-control.sh switch reasoning-cascade2",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch reasoning-cascade2",
       "port": 8081,
       "expectedModel": "reasoning-cascade2",
       "serverType": "LlamaCpp",
@@ -73,7 +73,7 @@
     {
       "id": "router-gptoss",
       "displayName": "GPT-OSS",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/router-control.sh switch gpt-oss",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch gpt-oss",
       "port": 8081,
       "expectedModel": "gpt-oss",
       "serverType": "LlamaCpp",
@@ -86,7 +86,7 @@
     {
       "id": "router-qwen35",
       "displayName": "Qwen3.5",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/router-control.sh switch agents-qwen35-9b",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch agents-qwen35-9b",
       "port": 8081,
       "expectedModel": "agents-qwen35",
       "serverType": "LlamaCpp",
@@ -99,7 +99,7 @@
     {
       "id": "router-qcn",
       "displayName": "QCN 236B",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/router-control.sh switch coding-qwen3-next",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch coding-qwen3-next",
       "port": 8081,
       "expectedModel": "coding-qwen3-next",
       "serverType": "LlamaCpp",
@@ -112,7 +112,7 @@
     {
       "id": "router-vision",
       "displayName": "Vision",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/router-control.sh switch vision-qwen35-9b",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch vision-qwen35-9b",
       "port": 8081,
       "expectedModel": "vision-qwen35",
       "serverType": "LlamaCpp",
@@ -138,7 +138,7 @@
     {
       "id": "router-qwen35-35b",
       "displayName": "Q3.5 35B",
-      "scriptPath": "wsl --exec /home/YOUR_USER/llm-deck/scripts/router-control.sh switch general-qwen35-35b",
+      "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch general-qwen35-35b",
       "port": 8081,
       "expectedModel": "general-qwen35-35b",
       "serverType": "LlamaCpp",

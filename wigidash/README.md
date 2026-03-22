@@ -1,7 +1,7 @@
-# WigiDash Integration for LLM Deck
+# WigiDash Integration for Wigi-LLM
 
 ## Overview
-The G.SKILL WigiDash is a 7-inch touchscreen PC command panel powered via USB. This guide details how to configure the WigiDash to interface with LLM Deck for controlling local language models.
+The G.SKILL WigiDash is a 7-inch touchscreen PC command panel powered via USB. This guide details how to configure the WigiDash to interface with Wigi-LLM for controlling local language models.
 
 ## Prerequisites
 Ensure the following components are installed and configured:
@@ -23,7 +23,7 @@ Move the required configuration and asset files into your newly created widget d
 * Icon naming convention: Files must be named strictly as `icon_{modelname}_active.png` and `icon_{modelname}_off.png` to map correctly to the model states.
 
 ## Wiring WSL Commands
-WigiDash operates in Windows, while LLM Deck scripts run in WSL2. You must bridge these environments using the `wsl --exec` command.
+WigiDash operates in Windows, while Wigi-LLM scripts run in WSL2. You must bridge these environments using the `wsl --exec` command.
 * In your `buttons.json`, format the `scriptPath` as follows:
   `"scriptPath": "wsl --exec /home/user/scripts/router-control.sh switch model-name"`
 * The `wsl --exec` prefix passes the execution directly to the WSL2 Linux environment.

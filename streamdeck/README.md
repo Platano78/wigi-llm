@@ -1,4 +1,4 @@
-# LLM Deck: StreamDeck Adaptation Guide
+# Wigi-LLM: StreamDeck Adaptation Guide
 
 ## Concept
 The core concept remains identical to the WigiDash implementation: utilizing hardware buttons to trigger local LLM model switching. However, the software wiring and execution methods differ due to the Elgato StreamDeck software architecture.

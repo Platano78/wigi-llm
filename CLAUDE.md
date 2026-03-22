@@ -1,4 +1,4 @@
-# LLM Deck
+# Wigi-LLM
 
 Physical hardware control panel for managing local LLM model fleets via llama.cpp router.
 
