@@ -114,13 +114,18 @@ namespace LLMBrainMonitorWidget
             this.WidgetSize = widget_size;
 
             Size size = widget_size.ToSize();
-            BitmapCurrent = new Bitmap(size.Width, size.Height, PixelFormat.Format16bppRgb565);
+            int w = size.Width > 0 ? size.Width : 480;
+            int h = size.Height > 0 ? size.Height : 320;
+            BitmapCurrent = new Bitmap(w, h, PixelFormat.Format16bppRgb565);
 
             _particles = new ParticleField(160);
             _sparkline = new Sparkline(120);
 
-            DrawFrame();
-            StartPoll();
+            // Initial paint — never let an exception escape the constructor.
+            // A failed first frame becomes a blank tile until the poll loop
+            // catches up, which is far better than crashing the host.
+            try { DrawFrame(); } catch { }
+            try { StartPoll(); } catch { }
         }
 
         private void StartPoll()
@@ -389,6 +394,13 @@ namespace LLMBrainMonitorWidget
                         }
                     }
 
+                    // Stash prev BEFORE any branch updates it, so the raw-delta
+                    // computation below sees the actual delta (not 0). Original
+                    // code overwrote _prevTokensTotal first, so rawDelta was
+                    // always zero — game mode never saw any token activity.
+                    double prevForDelta = _prevTokensTotal;
+                    DateTime nowTs = DateTime.UtcNow;
+
                     // Generation tok/s — direct gauge if available, else compute delta
                     if (directTps >= 0)
                     {
@@ -396,24 +408,26 @@ namespace LLMBrainMonitorWidget
                     }
                     else if (foundTokens)
                     {
-                        DateTime now = DateTime.UtcNow;
                         if (_prevTokensTotal >= 0 && _prevTokensTime != DateTime.MinValue)
                         {
                             double deltaTokens = tokensTotal - _prevTokensTotal;
-                            double deltaSec = (now - _prevTokensTime).TotalSeconds;
+                            double deltaSec = (nowTs - _prevTokensTime).TotalSeconds;
                             if (deltaSec > 0.1 && deltaTokens >= 0)
                                 _tokensPerSec = (float)(deltaTokens / deltaSec);
                         }
-                        _prevTokensTotal = tokensTotal;
-                        _prevTokensTime = now;
                     }
 
-                    // Track raw delta for particle spawning (independent of tps gauge)
-                    if (foundTokens && _prevTokensTotal >= 0)
+                    // Track raw delta for particle / enemy spawning. Always update
+                    // _prevTokensTotal at the end so both code paths converge.
+                    if (foundTokens)
                     {
-                        double rawDelta = tokensTotal - _prevTokensTotal;
-                        if (rawDelta > 0) _accumTokenDelta += rawDelta;
+                        if (prevForDelta >= 0)
+                        {
+                            double rawDelta = tokensTotal - prevForDelta;
+                            if (rawDelta > 0) _accumTokenDelta += rawDelta;
+                        }
                         _prevTokensTotal = tokensTotal;
+                        _prevTokensTime = nowTs;
                     }
                 }
             }
