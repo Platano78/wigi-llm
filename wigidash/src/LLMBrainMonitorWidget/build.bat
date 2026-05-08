@@ -1,11 +1,6 @@
 @echo off
-set PATH=C:\Program Files\Microsoft Visual Studio\2022\Preview\MSBuild\Current\Bin;%PATH%
-cd /d "%~dp0"
-msbuild LLMBrainMonitorWidget.csproj /t:Build /p:Configuration=Debug /v:minimal
-if %ERRORLEVEL% NEQ 0 (
-    echo BUILD FAILED
-    pause
-    exit /b 1
-)
-echo BUILD SUCCEEDED
-pause
+echo Building LLM Brain Monitor Widget...
+call "C:\Program Files\Microsoft Visual Studio\2022\Preview\Common7\Tools\VsDevCmd.bat" 2>nul
+msbuild LLMBrainMonitorWidget.csproj /t:Build /p:Configuration=Release /v:minimal
+echo.
+echo Build completed with exit code: %ERRORLEVEL%

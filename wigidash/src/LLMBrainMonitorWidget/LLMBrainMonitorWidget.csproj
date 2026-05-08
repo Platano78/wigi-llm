@@ -54,6 +54,11 @@
   <ItemGroup>
     <Compile Include="Widget.cs" />
     <Compile Include="WidgetInstance.cs" />
+    <Compile Include="ParticleField.cs" />
+    <Compile Include="Sparkline.cs" />
+    <Compile Include="HudPanel.cs" />
+    <Compile Include="RingGauge.cs" />
+    <Compile Include="VramBar.cs" />
     <Compile Include="..\Shared\GpuInfo.cs" Link="GpuInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
