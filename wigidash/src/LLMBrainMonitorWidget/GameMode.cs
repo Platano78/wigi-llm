@@ -17,10 +17,10 @@ namespace LLMBrainMonitorWidget
     public class GameMode
     {
         private const float ShipY = 290f;     // bottom band, leaves the bottom 30 for HUD
-        private const float ShipSpeed = 180f; // px/s horizontal tracking speed
+        private const float ShipSpeed = 320f; // px/s horizontal tracking speed (was 180)
         private const float EnemySpeedMin = 30f;
         private const float EnemySpeedMax = 90f;
-        private const float LaserSpeed = 360f;
+        private const float LaserSpeed = 420f;
         private const float ExplosionLife = 0.4f;
         private const int MaxEnemies = 80;
         private const int MaxLasers = 60;
@@ -30,6 +30,14 @@ namespace LLMBrainMonitorWidget
         // Spawn budget — 1 enemy per N tokens generated. Tuned to give a
         // visible challenge at moderate throughput without flooding at high tps.
         private const double TokensPerEnemy = 18.0;
+
+        // llama.cpp /metrics can stall during heavy inference, so token deltas
+        // arrive in a single big lump after the request completes. Cap the
+        // actual spawn rate so the screen doesn't fill instantly — debt
+        // accumulates and drains at this rate.
+        private const double MaxSpawnsPerSec = 5.0;
+        private const float FireCooldownSec = 0.08f;     // ~12 shots/sec ceiling
+        private const float FireAlignTolerancePx = 14f;  // generous — rough alignment fires
 
         private struct Enemy { public bool Alive; public float X, Y, Vy; public float W, H; public byte R, G, B; public int Hp; public int Type; }
         private struct Laser  { public bool Alive; public float X, Y, Vy; }
@@ -46,6 +54,7 @@ namespace LLMBrainMonitorWidget
         private float _shipAim = 240f;
         private float _fireCooldown = 0f;
         private double _spawnDebt = 0;
+        private float _spawnInterval = 0; // dt accumulator for rate-limited spawning
         private int _score = 0;
         private float _entryAnim = 1.0f; // 1->0 fade-in over first second
 
@@ -80,12 +89,19 @@ namespace LLMBrainMonitorWidget
                 }
             }
 
-            // Spawn budget from token delta
+            // Spawn budget from token delta — but rate-limit actual spawns.
+            // Without rate limiting, a 200-token response that arrives all at
+            // once (because /metrics stalls during inference) would spawn ~11
+            // enemies in a single frame. Pacing makes the autopilot feel
+            // continuous rather than wave-after-quiet.
             if (tokenDelta > 0) _spawnDebt += tokenDelta / TokensPerEnemy;
-            while (_spawnDebt >= 1.0)
+            _spawnInterval += dt;
+            float spawnPeriod = (float)(1.0 / MaxSpawnsPerSec);
+            while (_spawnDebt >= 1.0 && _spawnInterval >= spawnPeriod)
             {
                 SpawnEnemy(canvasW, tokensPerSec);
                 _spawnDebt -= 1.0;
+                _spawnInterval -= spawnPeriod;
             }
 
             // Auto-target nearest enemy — pick whoever is alive and lowest (closest to ship)
@@ -112,12 +128,25 @@ namespace LLMBrainMonitorWidget
                 else _shipX = _shipAim;
             }
 
-            // Auto-fire when aligned with target and cooldown clear
+            // Auto-fire whenever there's a target and cooldown clear. The
+            // tight 6px alignment from the previous version meant the ship
+            // spent most of its time chasing without firing; user reported
+            // "blindly fires but not enough." Now: fire if roughly aligned,
+            // and place the laser at the target column so it actually hits
+            // even when the ship hasn't fully caught up.
             _fireCooldown -= dt;
-            if (target >= 0 && _fireCooldown <= 0 && Math.Abs(_enemies[target].X - _shipX) < 6f)
+            if (target >= 0 && _fireCooldown <= 0)
             {
-                FireLaser(_shipX, ShipY - 8);
-                _fireCooldown = 0.12f; // ~8 shots/sec ceiling
+                float laserX = _shipX;
+                float dxToTarget = _enemies[target].X - _shipX;
+                if (Math.Abs(dxToTarget) < FireAlignTolerancePx)
+                {
+                    // Roughly aligned — fire from the target column directly so
+                    // the shot is guaranteed to enter the enemy's bounding box.
+                    laserX = _enemies[target].X;
+                }
+                FireLaser(laserX, ShipY - 8);
+                _fireCooldown = FireCooldownSec;
             }
 
             // Step enemies
