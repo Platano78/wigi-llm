@@ -78,7 +78,13 @@ namespace LLMBrainMonitorWidget
         private bool _killArmed = false;
         private DateTime _killArmedTime = DateTime.MinValue;
         private bool _killFlash = false;
-        private bool _gameMode = false; // Phase 2 toggle — autopilot inference shooter
+        // Autopilot game mode — owns its own animation thread for projectile motion
+        private bool _gameMode = false;
+        private GameMode _game;
+        private Thread _gameThread;
+        private volatile bool _gameRunning = false;
+        private double _gameTokenDeltaPending = 0; // accumulator for spawn weight
+        private DateTime _gameLastFrame = DateTime.UtcNow;
 
         // ----- HTTP -----
         private static readonly HttpClient _httpClient = new HttpClient()
@@ -547,22 +553,82 @@ namespace LLMBrainMonitorWidget
 
         private void DrawGameModePlaceholder(Graphics g, int w, int h)
         {
-            // Phase 2 — InferenceShooter goes here. Stub for now.
-            using (Font f = new Font("Arial", 22, FontStyle.Bold))
-            using (Brush b = new SolidBrush(Color.FromArgb(0, 230, 255)))
+            // Should not normally be reached — game mode renders via GameMode.Draw().
+            // Kept as a safety stub for the brief window between toggle and animation
+            // thread spinning up.
+            if (_game != null)
             {
-                StringFormat fmt = new StringFormat();
-                fmt.Alignment = StringAlignment.Center;
-                fmt.LineAlignment = StringAlignment.Center;
-                g.DrawString("AUTOPILOT MODE", f, b, new RectangleF(0, h / 2 - 30, w, 30), fmt);
+                _game.Draw(g, w, h, _modelName, _tokensPerSec);
             }
-            using (Font f = new Font("Arial", 11, FontStyle.Regular))
-            using (Brush b = new SolidBrush(Color.FromArgb(150, 160, 180)))
+        }
+
+        // ---------- Autopilot game mode lifecycle ----------
+
+        private void StartGameMode()
+        {
+            int w = BitmapCurrent != null ? BitmapCurrent.Width : 480;
+            _game = new GameMode(w);
+            _gameLastFrame = DateTime.UtcNow;
+            _gameTokenDeltaPending = 0;
+
+            _gameRunning = true;
+            _gameThread = new Thread(GameLoop);
+            _gameThread.IsBackground = true;
+            _gameThread.Name = "BrainMonitor-GameLoop";
+            _gameThread.Start();
+        }
+
+        private void StopGameMode()
+        {
+            _gameRunning = false;
+            if (_gameThread != null && _gameThread.IsAlive)
+                _gameThread.Join(500);
+            _gameThread = null;
+            if (_game != null)
             {
-                StringFormat fmt = new StringFormat();
-                fmt.Alignment = StringAlignment.Center;
-                g.DrawString("(coming in phase 2 — double-tap to exit)",
-                             f, b, new RectangleF(0, h / 2 + 10, w, 20), fmt);
+                _game.OnExit();
+                _game = null;
+            }
+        }
+
+        private void GameLoop()
+        {
+            const int FrameMs = 33; // ~30 FPS
+            while (_gameRunning && _gameMode)
+            {
+                if (!_pausePoll && BitmapCurrent != null && _drawingMutex.WaitOne(MutexTimeout))
+                {
+                    try
+                    {
+                        DateTime now = DateTime.UtcNow;
+                        float dt = (float)(now - _gameLastFrame).TotalSeconds;
+                        if (dt > 0.2f) dt = 0.2f;
+                        _gameLastFrame = now;
+
+                        // Pull pending token delta atomically. Poll loop accumulates
+                        // _accumTokenDelta from real metrics; we transfer it here so
+                        // the game spawns enemies aligned with actual token output.
+                        double tokenDelta = _accumTokenDelta;
+                        _accumTokenDelta = 0;
+
+                        if (_game != null)
+                        {
+                            _game.Step(dt, BitmapCurrent.Width, BitmapCurrent.Height,
+                                       _tokensPerSec, tokenDelta);
+
+                            using (Graphics g = Graphics.FromImage(BitmapCurrent))
+                            {
+                                g.SmoothingMode = SmoothingMode.AntiAlias;
+                                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                                _game.Draw(g, BitmapCurrent.Width, BitmapCurrent.Height,
+                                           _modelName, _tokensPerSec);
+                            }
+                            SignalUpdate();
+                        }
+                    }
+                    finally { _drawingMutex.ReleaseMutex(); }
+                }
+                Thread.Sleep(FrameMs);
             }
         }
 
@@ -626,6 +692,8 @@ namespace LLMBrainMonitorWidget
             if (click_type == ClickType.Double)
             {
                 _gameMode = !_gameMode;
+                if (_gameMode) StartGameMode();
+                else StopGameMode();
                 RedrawAndSignal();
                 return;
             }
@@ -664,6 +732,7 @@ namespace LLMBrainMonitorWidget
 
         public void Dispose()
         {
+            StopGameMode();
             _runPoll = false;
             _pausePoll = true;
             if (_pollThread != null && _pollThread.IsAlive)

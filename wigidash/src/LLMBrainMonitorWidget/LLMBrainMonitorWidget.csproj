@@ -59,6 +59,7 @@
     <Compile Include="HudPanel.cs" />
     <Compile Include="RingGauge.cs" />
     <Compile Include="VramBar.cs" />
+    <Compile Include="GameMode.cs" />
     <Compile Include="..\Shared\GpuInfo.cs" Link="GpuInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
