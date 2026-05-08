@@ -54,6 +54,9 @@ namespace LLMLauncherWidget
         // Radio group tracking - stores active button ID per radio group
         private Dictionary<int, string> _activeRadioGroupButton = new Dictionary<int, string>();
 
+        // Tokens/sec readout for the currently loaded model (updated via /metrics)
+        private volatile double _activeTokensPerSec = 0;
+
         public LLMLauncherWidgetInstance(IWidgetObject parent, WidgetSize widget_size, Guid instance_guid, string resourcePath)
         {
             _resourcePath = resourcePath;
@@ -809,6 +812,24 @@ namespace LLMLauncherWidget
             if (_buttonFlashState[index] == 1) stateText = "LAUNCHING";
             else if (_buttonFlashState[index] == 3) stateText = "ERROR";
 
+            // Append tokens/sec readout for running buttons matching the active model
+            if (btn.State == LauncherState.Running && _activeTokensPerSec > 0)
+            {
+                if (MatchesActiveModel(btn.ExpectedModelName, _activeModelName))
+                {
+                    string tokStr;
+                    if (_activeTokensPerSec >= 10)
+                    {
+                        tokStr = string.Format("{0:F0}", _activeTokensPerSec);
+                    }
+                    else
+                    {
+                        tokStr = string.Format("{0:F1}", _activeTokensPerSec);
+                    }
+                    stateText = stateText + " \u00b7 " + tokStr + " tok/s";
+                }
+            }
+
             using (Font smallFont = new Font("Arial", 7))
             using (Brush stateBrush = new SolidBrush(borderColor))
             {
@@ -1266,6 +1287,41 @@ namespace LLMLauncherWidget
                             {
                                 _activeModelName = "";
                             }
+
+                            // Fetch tokens/sec from Prometheus metrics endpoint
+                            try
+                            {
+                                string metricsUrl = "http://" + ROUTER_API_HOST + ":" + ROUTER_API_PORT + "/metrics";
+                                if (!string.IsNullOrEmpty(_activeModelName))
+                                {
+                                    metricsUrl = metricsUrl + "?model=" + System.Net.WebUtility.UrlEncode(_activeModelName);
+                                }
+                                HttpWebRequest metricsRequest = (HttpWebRequest)WebRequest.Create(metricsUrl);
+                                metricsRequest.Method = "GET";
+                                metricsRequest.Timeout = 1000;
+
+                                using (HttpWebResponse metricsResponse = (HttpWebResponse)metricsRequest.GetResponse())
+                                {
+                                    if (metricsResponse.StatusCode == HttpStatusCode.OK)
+                                    {
+                                        using (StreamReader metricsReader = new StreamReader(metricsResponse.GetResponseStream()))
+                                        {
+                                            string metricsText = metricsReader.ReadToEnd();
+                                            double tokensPerSec = ParseTokensPerSecFromMetrics(metricsText);
+                                            _activeTokensPerSec = tokensPerSec;
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Metrics endpoint unavailable or failed — keep previous value
+                                // but cap at 0 if we have no active model
+                                if (string.IsNullOrEmpty(_activeModelName))
+                                {
+                                    _activeTokensPerSec = 0;
+                                }
+                            }
                         }
                     }
                 }
@@ -1274,6 +1330,7 @@ namespace LLMLauncherWidget
             {
                 // Router not available, clear active model
                 _activeModelName = "";
+                _activeTokensPerSec = 0;
             }
         }
 
@@ -1385,6 +1442,74 @@ namespace LLMLauncherWidget
                     return;
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks whether the button's expected model matches the currently active model.
+        /// Reuses the same contains/pattern logic as SyncRadioGroupFromActiveModel.
+        /// </summary>
+        private bool MatchesActiveModel(string expectedModelName, string activeModelName)
+        {
+            if (string.IsNullOrEmpty(activeModelName))
+                return false;
+            if (string.IsNullOrEmpty(expectedModelName))
+                return false;
+
+            string modelLower = activeModelName.ToLower();
+            string expectedLower = expectedModelName.ToLower();
+
+            if (expectedLower.Contains("|"))
+            {
+                foreach (string pattern in expectedLower.Split('|'))
+                {
+                    if (modelLower.Contains(pattern.Trim()))
+                        return true;
+                }
+                return false;
+            }
+            else
+            {
+                return modelLower.Contains(expectedLower);
+            }
+        }
+
+        /// <summary>
+        /// Parses llamacpp:predicted_tokens_seconds (average generation throughput in tokens/s)
+        /// from Prometheus-format metrics text. Returns 0 if not found or malformed.
+        /// </summary>
+        private double ParseTokensPerSecFromMetrics(string metricsText)
+        {
+            if (string.IsNullOrEmpty(metricsText))
+                return 0;
+
+            // Look for the line: llamacpp:predicted_tokens_seconds <value>
+            string metricName = "llamacpp:predicted_tokens_seconds";
+            int idx = metricsText.IndexOf(metricName, StringComparison.Ordinal);
+            if (idx < 0)
+                return 0;
+
+            // Find the value on the same line
+            int lineStart = metricsText.LastIndexOf('\n', idx);
+            if (lineStart < 0) lineStart = 0;
+            else lineStart++;
+            int lineEnd = metricsText.IndexOf('\n', idx);
+            if (lineEnd < 0) lineEnd = metricsText.Length;
+
+            string line = metricsText.Substring(lineStart, lineEnd - lineStart).Trim();
+
+            // Extract the numeric value (last token on the line)
+            string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+                return 0;
+
+            double value;
+            if (double.TryParse(parts[parts.Length - 1],
+                                System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out value))
+                return value;
+
+            return 0;
         }
 
         public void Dispose()

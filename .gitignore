@@ -1,0 +1,18 @@
+# Build artifacts
+**/bin/
+**/obj/
+*.dll
+*.pdb
+*.cache
+*.user
+
+# IDE
+.vs/
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pi/dev artifacts
+/tmp/
