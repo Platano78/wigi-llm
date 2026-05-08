@@ -86,6 +86,14 @@ namespace LLMBrainMonitorWidget
         private double _gameTokenDeltaPending = 0; // accumulator for spawn weight
         private DateTime _gameLastFrame = DateTime.UtcNow;
 
+        // Manual double-tap detection — WigiDash's ClickType.Double doesn't fire
+        // reliably on this hardware; rapid Single taps come in as two distinct
+        // events. We defer stop-request actions by DoubleTapWindowMs so a second
+        // Single can convert the pair into a double-tap (game-mode toggle).
+        private const int DoubleTapWindowMs = 350;
+        private DateTime _lastSingleTapTime = DateTime.MinValue;
+        private System.Threading.CancellationTokenSource _pendingStopCts;
+
         // ----- HTTP -----
         private static readonly HttpClient _httpClient = new HttpClient()
         {
@@ -546,7 +554,7 @@ namespace LLMBrainMonitorWidget
             {
                 StringFormat fmt = new StringFormat();
                 fmt.Alignment = StringAlignment.Center;
-                g.DrawString("tap=stop  long-press 2x=kill  double-tap=autopilot",
+                g.DrawString("tap=stop  2-tap=autopilot  long-press 2x=kill",
                              f, b, new RectangleF(0, h - 42, w, 10), fmt);
             }
         }
@@ -640,10 +648,45 @@ namespace LLMBrainMonitorWidget
         {
             if (click_type == ClickType.Single)
             {
-                _stopRequested = true;
-                _stopFlashTime = DateTime.UtcNow;
+                DateTime now = DateTime.UtcNow;
+                double sinceLast = (now - _lastSingleTapTime).TotalMilliseconds;
+                _lastSingleTapTime = now;
+
+                // Second Single within the window — cancel pending stop, toggle game mode
+                if (sinceLast > 0 && sinceLast < DoubleTapWindowMs)
+                {
+                    if (_pendingStopCts != null)
+                    {
+                        try { _pendingStopCts.Cancel(); } catch { }
+                        _pendingStopCts = null;
+                    }
+                    _gameMode = !_gameMode;
+                    if (_gameMode) StartGameMode();
+                    else StopGameMode();
+                    RedrawAndSignal();
+                    return;
+                }
+
+                // First tap — defer the stop request so a follow-up tap can override it
+                if (_pendingStopCts != null)
+                {
+                    try { _pendingStopCts.Cancel(); } catch { }
+                }
+                _pendingStopCts = new System.Threading.CancellationTokenSource();
+                System.Threading.CancellationToken token = _pendingStopCts.Token;
+
                 Task.Run(async delegate
                 {
+                    try
+                    {
+                        await Task.Delay(DoubleTapWindowMs, token);
+                    }
+                    catch (TaskCanceledException) { return; }
+                    if (token.IsCancellationRequested) return;
+
+                    _stopRequested = true;
+                    _stopFlashTime = DateTime.UtcNow;
+                    RedrawAndSignal();
                     try
                     {
                         var content = new StringContent("", System.Text.Encoding.UTF8, "application/json");
@@ -654,7 +697,6 @@ namespace LLMBrainMonitorWidget
                     _stopRequested = false;
                     RedrawAndSignal();
                 });
-                RedrawAndSignal();
                 return;
             }
 
@@ -689,8 +731,16 @@ namespace LLMBrainMonitorWidget
                 return;
             }
 
+            // Some hardware does fire ClickType.Double natively — keep this path
+            // alive as a free fallback. The manual rapid-pair detector above will
+            // do the right thing when this doesn't fire.
             if (click_type == ClickType.Double)
             {
+                if (_pendingStopCts != null)
+                {
+                    try { _pendingStopCts.Cancel(); } catch { }
+                    _pendingStopCts = null;
+                }
                 _gameMode = !_gameMode;
                 if (_gameMode) StartGameMode();
                 else StopGameMode();
