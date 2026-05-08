@@ -815,26 +815,36 @@ namespace LLMLauncherWidget
             if (_buttonFlashState[index] == 1) stateText = "LAUNCHING";
             else if (_buttonFlashState[index] == 3) stateText = "ERROR";
 
-            // Append tokens/sec readout for running buttons matching the active model
-            if (btn.State == LauncherState.Running && _activeTokensPerSec > 0)
+            // When this button is the active model AND we have a live throughput
+            // reading, replace the "RUNNING" label entirely with the readout \u2014
+            // the green border + active icon already convey "running", so
+            // doubling that wastes the limited bottom-bar real estate.
+            // Use bright cyan for high contrast against icon imagery + the
+            // 70%-opacity black overlay above.
+            Color stateColor = borderColor;
+            bool showingTokens = false;
+            if (btn.State == LauncherState.Running && _activeTokensPerSec > 0
+                && _buttonFlashState[index] == 0
+                && MatchesActiveModel(btn.ExpectedModelName, _activeModelName))
             {
-                if (MatchesActiveModel(btn.ExpectedModelName, _activeModelName))
+                string tokStr;
+                if (_activeTokensPerSec >= 10)
                 {
-                    string tokStr;
-                    if (_activeTokensPerSec >= 10)
-                    {
-                        tokStr = string.Format("{0:F0}", _activeTokensPerSec);
-                    }
-                    else
-                    {
-                        tokStr = string.Format("{0:F1}", _activeTokensPerSec);
-                    }
-                    stateText = stateText + " \u00b7 " + tokStr + " tok/s";
+                    tokStr = string.Format("{0:F0}", _activeTokensPerSec);
                 }
+                else
+                {
+                    tokStr = string.Format("{0:F1}", _activeTokensPerSec);
+                }
+                stateText = tokStr + " tok/s";
+                stateColor = Color.FromArgb(0, 230, 255); // bright cyan
+                showingTokens = true;
             }
 
-            using (Font smallFont = new Font("Arial", 7))
-            using (Brush stateBrush = new SolidBrush(borderColor))
+            float stateFontSize = showingTokens ? 8f : 7f;
+            FontStyle stateFontStyle = showingTokens ? FontStyle.Bold : FontStyle.Regular;
+            using (Font smallFont = new Font("Arial", stateFontSize, stateFontStyle))
+            using (Brush stateBrush = new SolidBrush(stateColor))
             {
                 g.DrawString(stateText, smallFont, stateBrush, bounds.X + 5, bounds.Bottom - 15);
             }
