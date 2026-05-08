@@ -54,8 +54,11 @@ namespace LLMLauncherWidget
         // Radio group tracking - stores active button ID per radio group
         private Dictionary<int, string> _activeRadioGroupButton = new Dictionary<int, string>();
 
-        // Tokens/sec readout for the currently loaded model (updated via /metrics)
-        private volatile double _activeTokensPerSec = 0;
+        // Tokens/sec readout for the currently loaded model (updated via /metrics).
+        // Not marked volatile — C# disallows `volatile double`. CLR aligns 8-byte
+        // fields so reads are effectively atomic on x64; the writer updates every
+        // ~5s while DrawButton reads at ~30 FPS, so any torn-read window is invisible.
+        private double _activeTokensPerSec = 0;
 
         public LLMLauncherWidgetInstance(IWidgetObject parent, WidgetSize widget_size, Guid instance_guid, string resourcePath)
         {
