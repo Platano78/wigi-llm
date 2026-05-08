@@ -205,7 +205,9 @@ The WigiDash runs on Windows. Model management scripts live in WSL2. The `wsl --
 
 > **Status: experimental.** These widgets compile and run, but I rarely use them in daily practice — the buttons.json launcher above covers most of what I actually need. They live here as reference implementations for anyone who wants to build custom WigiDash widgets in C#, or fork pieces of them. Don't expect the same level of polish or stability as the launcher.
 
-Five C# widgets sharing a common `GpuInfo.cs` helper for VRAM detection. All target .NET Framework 4.7.2 and reference `WigiDashWidgetFramework.dll`.
+A growing collection of C# widgets sharing common helpers (`GpuInfo.cs`, `WslPaths.cs`). All target .NET Framework 4.7.2 with `LangVersion 5` and reference `WigiDashWidgetFramework.dll`.
+
+**LLM server management:**
 
 | Widget | Purpose |
 |--------|---------|
@@ -213,9 +215,42 @@ Five C# widgets sharing a common `GpuInfo.cs` helper for VRAM detection. All tar
 | **LLM Brain Monitor** | Full-screen 4×2 visual: animated waveform, VRAM gauge, KV cache, context window, tokens/sec, loading animations |
 | **LLM Router Status** | Compact router health: VRAM bar with green/yellow/red thresholds, switch timing, pending requests, remote GPU support |
 | **LLM Model Selector** | Minimal model picker: list with loaded indicators, VRAM display, tap-to-switch |
+| **LLM Monitor** | LLM server health monitor — polls `/health` and `/v1/models` on llama.cpp / vLLM / Ollama-style endpoints. Different from Stats (which is tokens/sec) |
+| **LLM Stats** | Live tokens/sec readout for the loaded model — small, glanceable |
+
+**MCP & Claude Code integration:**
+
+| Widget | Purpose |
+|--------|---------|
+| **MCP Pulse** | Live MCP server topology + tool-call activity visualization. Polls the MCP gateway `/health` for server-state nodes, tails `mcp.log` for activity beams. Three render modes via double-tap: full / topology-only / activity-only |
+| **Context Monitor** | Claude Code token-budget watcher. Reads JSONL session files from `~/.claude/projects/`, computes burn rate and time-until-reset across multiple sessions, weekly aggregation included |
+| **Integration Health** | Service health for a stack of HTTP/WSL services with start/stop/restart actions. Configurable PowerShell trigger script |
+| **Control Panel** | Quick-action button grid for git / build / test / deploy commands. Configurable shell-out per button |
+
+**Other:**
+
+| Widget | Purpose |
+|--------|---------|
 | **Clipboard Agent** | Hardware clipboard → LLM pipeline. Detects content type (code/JSON/URL/text), runs Summarize/Refactor/Explain/Fix-Bug actions on any OpenAI-compatible endpoint, writes result back to clipboard. Auto-discovers llama.cpp (8081), LM Studio (1234), vLLM (8000), Ollama (11434), Text Generation WebUI (5000) |
 
-**Shared helper — `wigidash/src/Shared/GpuInfo.cs`:** centralized VRAM detection used by every C# widget. Local mode shells out to `nvidia-smi.exe`; remote mode HTTP-queries `gpu-vram-server.py`. Thread-safe with a 5s cache.
+**Shared helpers — `wigidash/src/Shared/`:**
+
+- **`GpuInfo.cs`** — VRAM detection. Local mode shells out to `nvidia-smi.exe`; remote mode HTTP-queries `gpu-vram-server.py`. Thread-safe with a 5s cache.
+- **`WslPaths.cs`** — translates WSL POSIX paths to Windows UNC form (`\\wsl.localhost\<distro>\...`). Configurable per-environment via env vars (see below).
+
+### Per-environment configuration
+
+The widgets that read files from WSL (Context Monitor, MCP Pulse, Integration Health) need to know your distro and home path. Defaults work if your WSL setup mirrors a typical install. Override via environment variables on the Windows side:
+
+| Env var | Default | What it sets |
+|---|---|---|
+| `WSL_DISTRO` | `Ubuntu` | Distro name in the UNC path |
+| `WSL_USER_HOME` | _(see below)_ | Full WSL home path, e.g. `/home/foo` |
+| `WSL_USER` | _(see below)_ | Username only — builds `/home/<name>` if `WSL_USER_HOME` unset |
+
+If neither `WSL_USER_HOME` nor `WSL_USER` is set, `WslPaths` falls back to lowercased Windows username (`Environment.UserName`) — works when your WSL Linux user matches your Windows user. Otherwise set one of the env vars above.
+
+For the development gotchas list (build flow, threading rules, .NET 4.7.2 / LangVersion 5 limits), see [`docs/wigidash-development-learnings.md`](docs/wigidash-development-learnings.md).
 
 ### Building
 
@@ -251,15 +286,22 @@ wigi-llm/
     │   ├── buttons-starter.json    # Minimal config (kill + router + 2 models)
     │   └── buttons-full-fleet.json # Full fleet config with remote monitors
     ├── icons/                      # Pixel art icons (active/inactive pairs)
-    └── src/                        # C# widget source
-        ├── LLMLauncherWidget/      # The launcher (buttons.json driven) — the daily-driver
+    └── src/                          # C# widget source
+        ├── LLMLauncherWidget/        # The launcher (buttons.json driven) — the daily-driver
         ├── Shared/
-        │   └── GpuInfo.cs          # GPU VRAM detection (local + remote)
-        ├── LLMControlCenterWidget/ # [experimental] Full model management dashboard
-        ├── LLMBrainMonitorWidget/  # [experimental] Full-screen brain visualization
-        ├── LLMRouterStatusWidget/  # [experimental] Compact router health display
-        ├── LLMModelSelectorWidget/ # [experimental] Minimal model picker
-        └── ClipboardAgentWidget/   # [experimental] Hardware clipboard + LLM actions
+        │   ├── GpuInfo.cs            # GPU VRAM detection (local + remote)
+        │   └── WslPaths.cs           # WSL POSIX → Windows UNC translation
+        ├── LLMControlCenterWidget/   # [experimental] Full model management dashboard
+        ├── LLMBrainMonitorWidget/    # [experimental] Full-screen brain visualization
+        ├── LLMRouterStatusWidget/    # [experimental] Compact router health display
+        ├── LLMModelSelectorWidget/   # [experimental] Minimal model picker
+        ├── LLMStatsWidget/           # [experimental] Tokens/sec readout
+        ├── LLMStatusWidget/          # [experimental] LLM server health monitor
+        ├── MCPPulseWidget/           # [experimental] MCP topology + activity visualization
+        ├── ContextMonitorWidget/     # [experimental] Claude Code token-budget watcher
+        ├── IntegrationHealthWidget/  # [experimental] Service health + start/stop actions
+        ├── ControlPanelWidget/       # [experimental] Quick-action button grid
+        └── ClipboardAgentWidget/     # [experimental] Hardware clipboard + LLM actions
 ```
 
 ---

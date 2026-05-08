@@ -30,12 +30,12 @@ namespace LLMStatusWidget
 
         public string Author
         {
-            get { return "Aldwin"; }
+            get { return "WigiDash"; }
         }
 
         public string Website
         {
-            get { return "https://github.com/ElmorLabs-WigiDash"; }
+            get { return "https://github.com/Platano78/wigi-llm"; }
         }
 
         public Version Version

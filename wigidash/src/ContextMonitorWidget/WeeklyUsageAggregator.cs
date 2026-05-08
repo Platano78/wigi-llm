@@ -21,7 +21,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
 
     public class WeeklyUsageAggregator
     {
-        private static readonly string BasePath = WslPaths.ToWindowsPath("/home/platano/.claude/projects");
+        private static readonly string BasePath = WslPaths.UnderHome(".claude/projects");
         private const decimal DefaultWeeklyLimit = 100.00m;
         private string _logFile = @"C:\temp\widget_debug.txt";
 

@@ -10,7 +10,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
     {
         private readonly JSONLSessionParser _sessionParser;
         private readonly BurnRateCalculator _burnRateCalculator;
-        private static readonly string BasePath = WslPaths.ToWindowsPath("/home/platano/.claude/projects");
+        private static readonly string BasePath = WslPaths.UnderHome(".claude/projects");
         private static readonly TimeSpan SessionTimeout = TimeSpan.FromHours(5);
         private const int MaxSessions = 6;
         private string _logFile = @"C:\temp\widget_debug.txt";

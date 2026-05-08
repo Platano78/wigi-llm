@@ -45,13 +45,15 @@ namespace IntegrationHealthWidget
         // Services
         private List<ServiceInfo> _services;
         private string _wslIp = "--";
-        private string _publicUrl = "api.platanaso.org";
+        private string _publicUrl = "--";
         private bool _isExecutingCommand = false;
         private string _lastAction = "";
 
-        // Script path (uses WslPaths to centralize the distro name)
-        private static readonly string ScriptPath = WslPaths.ToWindowsPath(
-            "/home/platano/project/rest-bridge-2.0-full/scripts/rest-bridge-full-start.ps1");
+        // Script path under the WSL user home — matches a typical layout where
+        // the rest-bridge project lives at $HOME/project/rest-bridge-2.0-full.
+        // Override the user portion via WSL_USER_HOME env if your setup differs.
+        private static readonly string ScriptPath = WslPaths.UnderHome(
+            "project/rest-bridge-2.0-full/scripts/rest-bridge-full-start.ps1");
 
         // Button rectangles
         private Rectangle _startAllButton;
