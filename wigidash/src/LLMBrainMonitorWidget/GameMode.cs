@@ -35,7 +35,9 @@ namespace LLMBrainMonitorWidget
         // arrive in a single big lump after the request completes. Cap the
         // actual spawn rate so the screen doesn't fill instantly — debt
         // accumulates and drains at this rate.
-        private const double MaxSpawnsPerSec = 5.0;
+        // 2.5/sec means a 200-token response (~11 enemies of debt) spreads
+        // over ~4.5 seconds of sustained spawning instead of arriving as a wave.
+        private const double MaxSpawnsPerSec = 2.5;
         private const float FireCooldownSec = 0.08f;     // ~12 shots/sec ceiling
         private const float FireAlignTolerancePx = 14f;  // generous — rough alignment fires
 
@@ -54,7 +56,7 @@ namespace LLMBrainMonitorWidget
         private float _shipAim = 240f;
         private float _fireCooldown = 0f;
         private double _spawnDebt = 0;
-        private float _spawnInterval = 0; // dt accumulator for rate-limited spawning
+        private DateTime _lastSpawnTime = DateTime.MinValue;
         private int _score = 0;
         private float _entryAnim = 1.0f; // 1->0 fade-in over first second
 
@@ -90,18 +92,22 @@ namespace LLMBrainMonitorWidget
             }
 
             // Spawn budget from token delta — but rate-limit actual spawns.
-            // Without rate limiting, a 200-token response that arrives all at
-            // once (because /metrics stalls during inference) would spawn ~11
-            // enemies in a single frame. Pacing makes the autopilot feel
-            // continuous rather than wave-after-quiet.
+            // Earlier "_spawnInterval += dt; while (debt && interval >= period)"
+            // looked correct but accumulated dt while debt was 0; when a burst
+            // finally arrived the while loop drained both at once, defeating
+            // the cap. Clock-based gate with a small jitter is foolproof.
             if (tokenDelta > 0) _spawnDebt += tokenDelta / TokensPerEnemy;
-            _spawnInterval += dt;
-            float spawnPeriod = (float)(1.0 / MaxSpawnsPerSec);
-            while (_spawnDebt >= 1.0 && _spawnInterval >= spawnPeriod)
+
+            DateTime nowTs = DateTime.UtcNow;
+            double spawnPeriod = 1.0 / MaxSpawnsPerSec;
+            // Add a 30% jitter so spawns don't look like a metronome
+            double jitter = 1.0 + (_rng.NextDouble() - 0.5) * 0.6;
+            double interval = (nowTs - _lastSpawnTime).TotalSeconds;
+            if (_spawnDebt >= 1.0 && interval >= spawnPeriod * jitter)
             {
                 SpawnEnemy(canvasW, tokensPerSec);
                 _spawnDebt -= 1.0;
-                _spawnInterval -= spawnPeriod;
+                _lastSpawnTime = nowTs;
             }
 
             // Auto-target nearest enemy — pick whoever is alive and lowest (closest to ship)
