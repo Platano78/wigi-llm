@@ -9,6 +9,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using WigiDashWidgetFramework;
 using WigiDashWidgetFramework.WidgetUtility;
+using WigiLlm.Shared;
 
 namespace IntegrationHealthWidget
 {
@@ -48,8 +49,9 @@ namespace IntegrationHealthWidget
         private bool _isExecutingCommand = false;
         private string _lastAction = "";
 
-        // Script path
-        private const string ScriptPath = @"\\wsl.localhost\Ubuntu\home\platano\project\rest-bridge-2.0-full\scripts\rest-bridge-full-start.ps1";
+        // Script path (uses WslPaths to centralize the distro name)
+        private static readonly string ScriptPath = WslPaths.ToWindowsPath(
+            "/home/platano/project/rest-bridge-2.0-full/scripts/rest-bridge-full-start.ps1");
 
         // Button rectangles
         private Rectangle _startAllButton;

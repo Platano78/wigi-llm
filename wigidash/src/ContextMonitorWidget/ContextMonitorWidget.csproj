@@ -61,6 +61,7 @@
     <Compile Include="MultiSessionTracker.cs" />
     <Compile Include="WeeklyUsageAggregator.cs" />
     <Compile Include="StatusLineReader.cs" />
+    <Compile Include="..\Shared\WslPaths.cs" Link="WslPaths.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

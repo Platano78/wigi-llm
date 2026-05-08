@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using WigiLlm.Shared;
 
 namespace ClaudeCodeWidgets.ContextMonitor
 {
@@ -20,7 +21,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
 
     public class WeeklyUsageAggregator
     {
-        private const string BasePath = @"\\wsl$\Ubuntu\home\platano\.claude\projects";
+        private static readonly string BasePath = WslPaths.ToWindowsPath("/home/platano/.claude/projects");
         private const decimal DefaultWeeklyLimit = 100.00m;
         private string _logFile = @"C:\temp\widget_debug.txt";
 

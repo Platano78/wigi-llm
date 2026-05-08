@@ -4,6 +4,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using WigiLlm.Shared;
 
 namespace ClaudeCodeWidgets.ContextMonitor
 {
@@ -76,7 +77,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
 
     public class StatusLineReader
     {
-        private const string StatusLineDir = @"\\wsl$\Ubuntu\dev\shm";
+        private static readonly string StatusLineDir = WslPaths.ToWindowsPath("/dev/shm");
         private const string StatusLinePattern = "claude_statusline*.json";
         private string _logFile = @"C:\temp\widget_debug.txt";
 
