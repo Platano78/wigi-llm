@@ -141,31 +141,48 @@ namespace LLMBrainMonitorWidget
         {
             while (_runPoll)
             {
-                if (!_pausePoll)
+                try
                 {
-                    try
-                    {
-                        FetchAllDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-                    }
-                    catch { }
-
-                    UpdateVramFromGpuInfo();
-                    UpdateVisualizationState();
-
-                    if (_runPoll && _drawingMutex.WaitOne(MutexTimeout))
-                    {
-                        try
-                        {
-                            DrawFrame();
-                            SignalUpdate();
-                        }
-                        finally
-                        {
-                            _drawingMutex.ReleaseMutex();
-                        }
-                    }
+                    PollTick();
+                }
+                catch
+                {
+                    // Never let an exception escape — would terminate the thread
+                    // and likely the host process. Next tick retries.
                 }
                 Thread.Sleep(PollIntervalMs);
+            }
+        }
+
+        private void PollTick()
+        {
+            if (_pausePoll) return;
+
+            try
+            {
+                FetchAllDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            }
+            catch { }
+
+            try { UpdateVramFromGpuInfo(); } catch { }
+            try { UpdateVisualizationState(); } catch { }
+
+            // While game mode owns the canvas, the game thread does its own
+            // drawing + SignalUpdate. Don't fight it for the mutex or stack
+            // duplicate WidgetUpdated events.
+            if (_gameMode) return;
+
+            if (_runPoll && _drawingMutex.WaitOne(MutexTimeout))
+            {
+                try
+                {
+                    DrawFrame();
+                    SignalUpdate();
+                }
+                finally
+                {
+                    try { _drawingMutex.ReleaseMutex(); } catch { }
+                }
             }
         }
 
@@ -572,71 +589,102 @@ namespace LLMBrainMonitorWidget
 
         // ---------- Autopilot game mode lifecycle ----------
 
+        private readonly object _gameLifecycleLock = new object();
+
         private void StartGameMode()
         {
-            int w = BitmapCurrent != null ? BitmapCurrent.Width : 480;
-            _game = new GameMode(w);
-            _gameLastFrame = DateTime.UtcNow;
-            _gameTokenDeltaPending = 0;
+            lock (_gameLifecycleLock)
+            {
+                if (_gameRunning) return; // already running
 
-            _gameRunning = true;
-            _gameThread = new Thread(GameLoop);
-            _gameThread.IsBackground = true;
-            _gameThread.Name = "BrainMonitor-GameLoop";
-            _gameThread.Start();
+                int w = BitmapCurrent != null ? BitmapCurrent.Width : 480;
+                _game = new GameMode(w);
+                _gameLastFrame = DateTime.UtcNow;
+                _gameTokenDeltaPending = 0;
+
+                _gameRunning = true;
+                _gameThread = new Thread(GameLoop);
+                _gameThread.IsBackground = true;
+                _gameThread.Name = "BrainMonitor-GameLoop";
+                _gameThread.Start();
+            }
         }
 
         private void StopGameMode()
         {
-            _gameRunning = false;
-            if (_gameThread != null && _gameThread.IsAlive)
-                _gameThread.Join(500);
-            _gameThread = null;
-            if (_game != null)
+            Thread t;
+            lock (_gameLifecycleLock)
             {
-                _game.OnExit();
-                _game = null;
+                if (!_gameRunning && _gameThread == null) return;
+                _gameRunning = false;
+                t = _gameThread;
+                _gameThread = null;
+            }
+            // Join outside the lock so a long-running game tick doesn't deadlock
+            // a future StartGameMode racing against this stop.
+            if (t != null && t.IsAlive) { try { t.Join(800); } catch { } }
+            // Now safe to drop the GameMode instance — the loop has either
+            // exited (Join returned) or is past its last access.
+            lock (_gameLifecycleLock)
+            {
+                if (_game != null)
+                {
+                    try { _game.OnExit(); } catch { }
+                    _game = null;
+                }
             }
         }
 
         private void GameLoop()
         {
-            const int FrameMs = 33; // ~30 FPS
+            const int FrameMs = 50; // 20 FPS — easier on GDI+ + WidgetUpdated dispatch
             while (_gameRunning && _gameMode)
             {
-                if (!_pausePoll && BitmapCurrent != null && _drawingMutex.WaitOne(MutexTimeout))
+                try
                 {
-                    try
-                    {
-                        DateTime now = DateTime.UtcNow;
-                        float dt = (float)(now - _gameLastFrame).TotalSeconds;
-                        if (dt > 0.2f) dt = 0.2f;
-                        _gameLastFrame = now;
-
-                        // Pull pending token delta atomically. Poll loop accumulates
-                        // _accumTokenDelta from real metrics; we transfer it here so
-                        // the game spawns enemies aligned with actual token output.
-                        double tokenDelta = _accumTokenDelta;
-                        _accumTokenDelta = 0;
-
-                        if (_game != null)
-                        {
-                            _game.Step(dt, BitmapCurrent.Width, BitmapCurrent.Height,
-                                       _tokensPerSec, tokenDelta);
-
-                            using (Graphics g = Graphics.FromImage(BitmapCurrent))
-                            {
-                                g.SmoothingMode = SmoothingMode.AntiAlias;
-                                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                                _game.Draw(g, BitmapCurrent.Width, BitmapCurrent.Height,
-                                           _modelName, _tokensPerSec);
-                            }
-                            SignalUpdate();
-                        }
-                    }
-                    finally { _drawingMutex.ReleaseMutex(); }
+                    GameTick();
+                }
+                catch
+                {
+                    // Swallow — never let an exception escape the thread. The game
+                    // mode is a visual extra; if a frame fails, the next frame retries.
                 }
                 Thread.Sleep(FrameMs);
+            }
+        }
+
+        private void GameTick()
+        {
+            // Snapshot _game locally — Stop can null it from another thread between
+            // the null-check and the next access otherwise.
+            GameMode game = _game;
+            Bitmap bmp = BitmapCurrent;
+            if (game == null || bmp == null) return;
+            if (_pausePoll) return;
+            if (!_drawingMutex.WaitOne(MutexTimeout)) return;
+            try
+            {
+                DateTime now = DateTime.UtcNow;
+                float dt = (float)(now - _gameLastFrame).TotalSeconds;
+                if (dt > 0.2f) dt = 0.2f;
+                _gameLastFrame = now;
+
+                double tokenDelta = _accumTokenDelta;
+                _accumTokenDelta = 0;
+
+                game.Step(dt, bmp.Width, bmp.Height, _tokensPerSec, tokenDelta);
+
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                    game.Draw(g, bmp.Width, bmp.Height, _modelName, _tokensPerSec);
+                }
+                SignalUpdate();
+            }
+            finally
+            {
+                try { _drawingMutex.ReleaseMutex(); } catch { }
             }
         }
 
