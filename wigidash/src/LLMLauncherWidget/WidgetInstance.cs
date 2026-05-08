@@ -1322,6 +1322,7 @@ namespace LLMLauncherWidget
                                             string metricsText = metricsReader.ReadToEnd();
                                             double tokensPerSec = ParseTokensPerSecFromMetrics(metricsText);
                                             _activeTokensPerSec = tokensPerSec;
+                                            LogDetectionInfo("Metrics: tokens/sec = " + tokensPerSec.ToString("F2"));
                                         }
                                     }
                                 }
@@ -1490,38 +1491,37 @@ namespace LLMLauncherWidget
         /// Parses llamacpp:predicted_tokens_seconds (average generation throughput in tokens/s)
         /// from Prometheus-format metrics text. Returns 0 if not found or malformed.
         /// </summary>
+        /// <remarks>
+        /// Iterates line-by-line skipping "#" comments — the metric name appears first in
+        /// "# HELP llamacpp:predicted_tokens_seconds Average ... tokens/s." which would
+        /// fool a naive IndexOf-based parser into trying to parse "tokens/s." as a number.
+        /// </remarks>
         private double ParseTokensPerSecFromMetrics(string metricsText)
         {
             if (string.IsNullOrEmpty(metricsText))
                 return 0;
 
-            // Look for the line: llamacpp:predicted_tokens_seconds <value>
-            string metricName = "llamacpp:predicted_tokens_seconds";
-            int idx = metricsText.IndexOf(metricName, StringComparison.Ordinal);
-            if (idx < 0)
-                return 0;
+            // Trailing space ensures we match the metric line, not the # HELP/# TYPE
+            // comment lines that contain the same identifier substring.
+            const string metricPrefix = "llamacpp:predicted_tokens_seconds ";
+            string[] lines = metricsText.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (line.Length == 0) continue;
+                if (line[0] == '#') continue;
+                if (!line.StartsWith(metricPrefix, StringComparison.Ordinal)) continue;
 
-            // Find the value on the same line
-            int lineStart = metricsText.LastIndexOf('\n', idx);
-            if (lineStart < 0) lineStart = 0;
-            else lineStart++;
-            int lineEnd = metricsText.IndexOf('\n', idx);
-            if (lineEnd < 0) lineEnd = metricsText.Length;
+                string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2) continue;
 
-            string line = metricsText.Substring(lineStart, lineEnd - lineStart).Trim();
-
-            // Extract the numeric value (last token on the line)
-            string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
-                return 0;
-
-            double value;
-            if (double.TryParse(parts[parts.Length - 1],
-                                System.Globalization.NumberStyles.Float,
-                                System.Globalization.CultureInfo.InvariantCulture,
-                                out value))
-                return value;
-
+                double value;
+                if (double.TryParse(parts[parts.Length - 1],
+                                    System.Globalization.NumberStyles.Float,
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    out value))
+                    return value;
+            }
             return 0;
         }
 
