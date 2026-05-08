@@ -532,6 +532,55 @@ pi --print --provider llama --model general-qwen36-35b \
 
 ---
 
+## MCP Gateway (127.0.0.1:8090) — data source findings
+
+**Date probed**: 2026-05-08 (Neural Nexus widget development)
+
+### Reachability
+
+| Endpoint | Response | Notes |
+|---|---|---|
+| `GET /` | `401 {"error":"Unauthorized"}` | Needs auth token |
+| `GET /health` | **200** — full JSON with server topology | **Primary data source for Neural Nexus** |
+| `GET /metrics` | `401 {"error":"Unauthorized"}` | Needs auth token |
+
+### `/health` response schema
+
+```json
+{
+  "status": "ok",
+  "uptime_seconds": 65621,
+  "servers": {
+    "serena": { "status": "connected", "tools_count": 21 },
+    "context7": { "status": "connected", "tools_count": 2 },
+    "stitch": { "status": "disconnected", "error": "can't resolve reference...", "tools_count": 0 },
+    "unity-mcp": { "status": "disconnected", "error": "Connection timeout", "tools_count": 0 }
+  },
+  "total_tools": 296
+}
+```
+
+- `status`: `"ok"` or other error string
+- `uptime_seconds`: integer
+- `servers`: dict of `{server_name: {status, tools_count, error?}}`
+- `status` values: `"connected"` or `"disconnected"`
+- `tools_count`: integer (0 for disconnected)
+- `error`: optional string (present on disconnected servers)
+
+### Neural Nexus widget usage
+
+The Neural Nexus widget (GUID `48B421E2-91C8-4B92-9CF8-F8E6C9BDACBE`) uses `/health` as its primary data source:
+- Center node = "MCP Gateway" itself
+- Peripheral nodes = each server from `servers` dict
+- Health coloring: green (connected + polled ≤10s), amber (stale 10-30s), red (30s+ or 3+ consecutive failures)
+- Poll interval: 2 seconds
+
+### `claude_statusline.json` — NOT FOUND
+
+No `/dev/shm/claude_statusline.json` or `~/.claude/*statusline*.json` exists. The `statusline.py` Python script exists at `~/.claude/statusline.py` with a `statusline_config.toml` for MCP display rules, but no JSON output file is generated. The PRD for Neural Nexus assumed this file exists — it does not. The `/health` endpoint is the correct data source.
+
+---
+
 ## Final note
 
 **Always build and deploy and visually verify before declaring a feature done.** Type-checks pass on illegal `volatile double`. Pi reports `was_truncated: false` on truncated output. The actual touchscreen + actual router + actual user-tap is the only ground truth.
