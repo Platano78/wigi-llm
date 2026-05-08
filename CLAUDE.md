@@ -4,7 +4,7 @@ A widget suite for the G.SKILL WigiDash touchscreen panel providing hardware-lev
 
 ## What This Is
 
-Seven widgets (1 buttons.json + 6 C# compiled) that turn a WigiDash into a dedicated control surface for local AI. Covers model switching, VRAM monitoring, router health, and a clipboard-to-LLM pipeline.
+Six C# WigiDash widgets that turn the panel into a dedicated control surface for local AI. The daily-driver is the LLM Launcher (config-driven via buttons.json); the rest are experimental — model dashboards, brain monitors, router health, clipboard-to-LLM pipeline.
 
 ## Key Files
 
@@ -12,8 +12,9 @@ Seven widgets (1 buttons.json + 6 C# compiled) that turn a WigiDash into a dedic
 - `scripts/gpu-vram-server.py` — Remote GPU VRAM HTTP server
 - `wigidash/examples/` — Example buttons.json configurations
 - `wigidash/icons/` — Pixel art icon set for model buttons
-- `wigidash/src/Shared/GpuInfo.cs` — Shared GPU VRAM detection helper
-- `wigidash/src/*/` — C# widget source for each widget
+- `wigidash/src/LLMLauncherWidget/` — The daily-driver widget (reads buttons.json at runtime)
+- `wigidash/src/Shared/GpuInfo.cs` — Shared GPU VRAM detection helper used by the experimental widgets
+- `wigidash/src/{LLMControlCenter,LLMBrainMonitor,LLMRouterStatus,LLMModelSelector,ClipboardAgent}Widget/` — Experimental C# widgets
 
 ## Architecture
 
@@ -28,5 +29,7 @@ Widgets → nvidia-smi.exe (local VRAM) or gpu-vram-server.py (remote VRAM)
 - Do not hardcode user-specific paths — use YOUR_USER placeholders in examples
 - Do not hardcode GPU VRAM sizes — use GpuInfo.cs for auto-detection
 - Do not hardcode personal IPs, usernames, or domains in any shared file
-- C# widgets target .NET Framework 4.8 and must reference WigiDashWidgetFramework.dll
-- All C# widgets link to Shared/GpuInfo.cs via `<Compile Include="..\Shared\GpuInfo.cs" Link="GpuInfo.cs" />`
+- C# widgets target .NET Framework 4.7.2 and must reference WigiDashWidgetFramework.dll (HintPath = bare filename, drop the DLL next to the .csproj when building)
+- The experimental widgets link to Shared/GpuInfo.cs via `<Compile Include="..\Shared\GpuInfo.cs" Link="GpuInfo.cs" />` — LLMLauncherWidget is self-contained and does NOT depend on it
+- LLMLauncherWidget reads buttons.json from its widget directory at runtime; the JSON is per-user config, never bundled into the DLL
+- LLMLauncherWidget has known hardcoded constants for ROUTER_API_HOST/PORT and LLM_SERVER_PORTS at top of WidgetInstance.cs — fine for now, fix if a user reports needing non-default ports

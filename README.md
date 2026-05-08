@@ -24,9 +24,9 @@ The repo also includes a suite of experimental C# widgets (model dashboards, bra
 
 ## LLM Launcher (the main event)
 
-**Type:** `buttons.json` widget — no C# code, no build step.
+**Type:** C# WigiDash widget driven by a `buttons.json` config.
 
-Drop a JSON config into WigiDash Manager and you get a grid of touchscreen buttons that drive your llama.cpp router.
+Architecturally a hybrid: a compiled C# widget DLL handles rendering, polling, and click dispatch; a JSON config file drives what each button does. End users typically only edit the JSON — the DLL stays as-is.
 
 - **One-touch model switching** — tap a button, the model loads
 - **Radio group behavior** — loading one model auto-unloads others in the same group, preventing VRAM overflow
@@ -35,7 +35,9 @@ Drop a JSON config into WigiDash Manager and you get a grid of touchscreen butto
 - **Kill switch** — dedicated button to unload everything and flush VRAM
 - **Router auto-start** — automatically starts llama.cpp router if it's not running
 
-Two example configs:
+**Source:** `wigidash/src/LLMLauncherWidget/` — ~2,100 lines of C# / XAML. Build with `build.bat`, deploy with `deploy.bat`.
+
+**Config examples:**
 
 | File | Description |
 |------|-------------|
@@ -122,19 +124,25 @@ The WigiDash runs on Windows. Model management scripts live in WSL2. The `wsl --
 - **NVIDIA GPU** with `nvidia-smi` available
 - **llama.cpp** running in router mode — or any OpenAI-compatible local LLM server
 - **jq** in WSL (`sudo apt-get install jq`) — required by `router-control.sh`
-- **Visual Studio 2022 + .NET Framework 4.8** — only if you want to build the experimental C# widgets
+- **Visual Studio 2022 + .NET Framework 4.7.2** — for building the LLM Launcher widget DLL or any of the experimental C# widgets
 
 ---
 
 ## Quick Start
 
 1. Install WigiDash Manager
-2. Create a custom widget in the manager — note the GUID it generates
-3. Copy `wigidash/examples/buttons-starter.json` to:
+2. Build the LLM Launcher widget:
+   ```bash
+   cd wigidash/src/LLMLauncherWidget
+   build.bat
+   deploy.bat
    ```
-   %APPDATA%\G.SKILL\WigiDashManager\Widgets\{YOUR-GUID}\buttons.json
+   The widget uses GUID `B8C9D0E1-F2A3-4567-8901-BCDEF1234567` and deploys to:
    ```
-4. Copy the `wigidash/icons/` directory contents into the same widget folder
+   %APPDATA%\G.SKILL\WigiDashManager\Widgets\B8C9D0E1-F2A3-4567-8901-BCDEF1234567\
+   ```
+3. Copy `wigidash/examples/buttons-starter.json` to that same folder as `buttons.json`
+4. Copy the `wigidash/icons/` directory contents to that folder too
 5. Edit `buttons.json` — update every `scriptPath` to point to your WSL path:
    ```json
    "scriptPath": "wsl --exec /home/YOUR_USER/wigi-llm/scripts/router-control.sh switch model-name"
@@ -143,7 +151,7 @@ The WigiDash runs on Windows. Model management scripts live in WSL2. The `wsl --
    ```json
    "pollHost": "REMOTE_IP"
    ```
-7. Restart WigiDash Manager to load the new configuration
+7. Restart WigiDash Manager to load the widget
 
 ---
 
@@ -197,7 +205,7 @@ The WigiDash runs on Windows. Model management scripts live in WSL2. The `wsl --
 
 > **Status: experimental.** These widgets compile and run, but I rarely use them in daily practice — the buttons.json launcher above covers most of what I actually need. They live here as reference implementations for anyone who wants to build custom WigiDash widgets in C#, or fork pieces of them. Don't expect the same level of polish or stability as the launcher.
 
-Five C# widgets sharing a common `GpuInfo.cs` helper for VRAM detection. All target .NET Framework 4.8 and reference `WigiDashWidgetFramework.dll`.
+Five C# widgets sharing a common `GpuInfo.cs` helper for VRAM detection. All target .NET Framework 4.7.2 and reference `WigiDashWidgetFramework.dll`.
 
 | Widget | Purpose |
 |--------|---------|
@@ -243,14 +251,15 @@ wigi-llm/
     │   ├── buttons-starter.json    # Minimal config (kill + router + 2 models)
     │   └── buttons-full-fleet.json # Full fleet config with remote monitors
     ├── icons/                      # Pixel art icons (active/inactive pairs)
-    └── src/                        # Experimental C# widgets
+    └── src/                        # C# widget source
+        ├── LLMLauncherWidget/      # The launcher (buttons.json driven) — the daily-driver
         ├── Shared/
         │   └── GpuInfo.cs          # GPU VRAM detection (local + remote)
-        ├── LLMControlCenterWidget/ # Full model management dashboard
-        ├── LLMBrainMonitorWidget/  # Full-screen brain visualization
-        ├── LLMRouterStatusWidget/  # Compact router health display
-        ├── LLMModelSelectorWidget/ # Minimal model picker
-        └── ClipboardAgentWidget/   # Hardware clipboard + LLM actions
+        ├── LLMControlCenterWidget/ # [experimental] Full model management dashboard
+        ├── LLMBrainMonitorWidget/  # [experimental] Full-screen brain visualization
+        ├── LLMRouterStatusWidget/  # [experimental] Compact router health display
+        ├── LLMModelSelectorWidget/ # [experimental] Minimal model picker
+        └── ClipboardAgentWidget/   # [experimental] Hardware clipboard + LLM actions
 ```
 
 ---
