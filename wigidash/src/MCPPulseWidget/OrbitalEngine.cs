@@ -33,19 +33,20 @@ namespace MCPPulseWidget
             int count = peripherals.Count;
             if (count == 0) return;
 
-            // If more than 12 servers, use two concentric rings
+            // If more than 12 servers, use two concentric rings with INTERLEAVED
+            // placement (even-indexed → inner, odd-indexed → outer). Keeps the
+            // overall shape circular. The earlier "first half on inner, second
+            // half on outer" packed all small nodes onto one side and all large
+            // ones onto the other — looked lopsided.
             if (count > 12)
             {
                 float innerR = orbitRadius * 0.6f;
                 float outerR = orbitRadius;
-                int half = count / 2;
 
                 for (int i = 0; i < count; i++)
                 {
                     GraphNode node = peripherals[i];
-                    float r = (i < half) ? innerR : outerR;
-                    node.OrbitRadius = r;
-                    // Alternate placement: first half on inner ring, second half on outer
+                    node.OrbitRadius = (i % 2 == 0) ? innerR : outerR;
                     float angle = (2f * (float)Math.PI * i / count) - (float)Math.PI / 2f;
                     node.OrbitAngle = angle;
                 }
