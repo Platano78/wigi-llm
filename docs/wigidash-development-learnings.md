@@ -9,8 +9,12 @@ Reference for future development on this repo. Captures what would be expensive 
 - **Repo**: https://github.com/Platano78/wigi-llm (public, MIT)
 - **Local path**: `/home/platano/project/wigi-llm`
 - **Daily-driver widget**: LLMLauncherWidget (GUID `B8C9D0E1-F2A3-4567-8901-BCDEF1234567`)
-- **Other widgets**: LLMStatsWidget, LLMBrainMonitorWidget (cockpit + autopilot game), plus 4 experimental (LLMControlCenter, LLMModelSelector, LLMRouterStatus, ClipboardAgent)
-- **Shared helper**: `wigidash/src/Shared/GpuInfo.cs` (nvidia-smi VRAM detection, used by all C# widgets except Launcher)
+- **LLM-server widgets**: LLMStatsWidget, LLMStatusWidget, LLMBrainMonitorWidget (cockpit + autopilot game), LLMControlCenter, LLMModelSelector, LLMRouterStatus
+- **MCP / Claude Code widgets**: MCPPulseWidget (canonical MCP viz — topology + activity), ContextMonitorWidget (Claude Code burn-rate), IntegrationHealthWidget (service start/stop), ControlPanelWidget (action buttons)
+- **Other**: ClipboardAgentWidget
+- **Shared helpers** (`wigidash/src/Shared/`):
+  - `GpuInfo.cs` — nvidia-smi VRAM detection (local + remote)
+  - `WslPaths.cs` — WSL POSIX → Windows UNC translation, env-var configurable
 - **Target framework**: **.NET Framework 4.7.2**, **C# LangVersion 5** — old enough that many modern C# features will silently fail to compile
 - **Canvas sizes**: WidgetSize × 96 px per cell. 1×1 = 96×96, 2×1 = 96×192, 4×2 = 192×384 (rotated to 480×320 in BrainMonitor's case as fullscreen)
 
@@ -94,6 +98,9 @@ Pi and Codex both shipped code with these errors. **Verify every build, not ever
 | `$"interpolated {value}"` | Requires C# 6+ | `string.Format("{0}", value)` or concat |
 | `=>` expression-bodied members (`int Foo => 42;`) | Requires C# 6+ | Old-school getter blocks |
 | `nameof(X)` | Requires C# 6+ | Hardcoded strings |
+| `const T = SomeMethod(...)` | C# 5 `const` requires a compile-time constant; method calls aren't allowed | Use `static readonly` instead. Behaviorally equivalent for module-scoped values; computed once at type init. |
+| Auto-property initializers (`int X { get; set; } = 0;`) | Requires C# 6+ | Initialize in constructor |
+| Null-conditional (`obj?.Foo`) | Requires C# 6+ | `obj != null ? obj.Foo : default` |
 
 **Generic lambdas are fine** — `new Thread(() => DoStuff())` works in C# 5. Only the bullet items above are blocked.
 
@@ -532,55 +539,213 @@ pi --print --provider llama --model general-qwen36-35b \
 
 ---
 
-## MCP Gateway (127.0.0.1:8090) — data source findings
+## MCP data sources — what works, what doesn't
 
-**Date probed**: 2026-05-08 (Neural Nexus widget development)
+**Date probed**: 2026-05-08 (Neural Nexus → MCPPulse merge)
 
-### Reachability
+There are two complementary signals to draw on for MCP visualization. Pick the right one for the widget you're building.
+
+### MCP Gateway HTTP (`127.0.0.1:8090`) — topology / health
 
 | Endpoint | Response | Notes |
 |---|---|---|
 | `GET /` | `401 {"error":"Unauthorized"}` | Needs auth token |
-| `GET /health` | **200** — full JSON with server topology | **Primary data source for Neural Nexus** |
-| `GET /metrics` | `401 {"error":"Unauthorized"}` | Needs auth token |
+| `GET /health` | **200** — full JSON with server topology | **Only public endpoint.** Use this for state. |
+| `GET /metrics` | `401` | Needs auth |
+| `GET /events` `/calls` `/stream` `/sse` `/v1/*` | `401` | Probed 2026-05-08; all 401. Endpoints exist but auth-gated, so widgets can't use them today. |
 
-### `/health` response schema
+`/health` response schema:
 
 ```json
 {
   "status": "ok",
   "uptime_seconds": 65621,
   "servers": {
-    "serena": { "status": "connected", "tools_count": 21 },
-    "context7": { "status": "connected", "tools_count": 2 },
-    "stitch": { "status": "disconnected", "error": "can't resolve reference...", "tools_count": 0 },
-    "unity-mcp": { "status": "disconnected", "error": "Connection timeout", "tools_count": 0 }
+    "serena":   { "status": "connected",    "tools_count": 21 },
+    "context7": { "status": "connected",    "tools_count": 2 },
+    "stitch":   { "status": "disconnected", "error": "can't resolve reference...", "tools_count": 0 }
   },
   "total_tools": 296
 }
 ```
 
-- `status`: `"ok"` or other error string
-- `uptime_seconds`: integer
-- `servers`: dict of `{server_name: {status, tools_count, error?}}`
-- `status` values: `"connected"` or `"disconnected"`
-- `tools_count`: integer (0 for disconnected)
-- `error`: optional string (present on disconnected servers)
+`status` values: `"connected"` or `"disconnected"`. `error` is optional, present on disconnected servers.
 
-### Neural Nexus widget usage
+### MCP log file (`~/.claude/logs/mcp.log`) — activity / tool calls
 
-The Neural Nexus widget (GUID `48B421E2-91C8-4B92-9CF8-F8E6C9BDACBE`) uses `/health` as its primary data source:
-- Center node = "MCP Gateway" itself
-- Peripheral nodes = each server from `servers` dict
+JSONL, one event per line. Schema (verified 2026-05-08):
+
+```json
+{"tool_name":"server::tool","server":"<name>","tool":"<name>","success":true,"duration":22,"timestamp":"2026-05-08T10:07:00-04:00"}
+```
+
+The `server` field maps directly to the keys in `/health`'s `servers` dict — that's the join key for unified topology+activity widgets. Tail with last-position tracking; only read new bytes per poll.
+
+From Windows side, the file is at `\\wsl.localhost\<distro>\home\<user>\.claude\logs\mcp.log` — use `WslPaths.UnderHome(".claude/logs/mcp.log")` so it works for any user.
+
+### Dead sources — don't use
+
+- **`http://127.0.0.1:3457/api/stats`** — old MCPNeuralPulse data source. Returns HTTP 000 (connection refused) as of 2026-05-08. The custom stats server it depended on is gone.
+- **`/dev/shm/claude_statusline.json`** and **`~/.claude/*statusline*.json`** — never existed. The `statusline.py` script exists with a config but doesn't generate a JSON output file. Several PRDs assumed this file existed; they were wrong.
+
+### MCPPulse widget usage
+
+MCPPulse (GUID `82CE97C3-2CB7-4658-8433-ED4300721E2F`) is the canonical MCP visualization, replacing the now-retired Nexus / MCPNeuralPulse / MCPHealth trio:
+- **Topology layer**: polls `/health` every 2s, builds dynamic node list (one per server)
+- **Activity layer**: tails `mcp.log` every 200ms, fires beam from `event.server` node → center on each call
 - Health coloring: green (connected + polled ≤10s), amber (stale 10-30s), red (30s+ or 3+ consecutive failures)
-- Poll interval: 2 seconds
+- Three render modes via double-tap: full / topology-only / activity-only
+- Dual-thread architecture with shared mutex on the bitmap (poll + tail threads, both with top-level try/catch)
 
-### `claude_statusline.json` — NOT FOUND
+---
 
-No `/dev/shm/claude_statusline.json` or `~/.claude/*statusline*.json` exists. The `statusline.py` Python script exists at `~/.claude/statusline.py` with a `statusline_config.toml` for MCP display rules, but no JSON output file is generated. The PRD for Neural Nexus assumed this file exists — it does not. The `/health` endpoint is the correct data source.
+## Shared/WslPaths.cs — WSL path translation
+
+WSL widgets often read files from the Linux side. The Windows `\\wsl.localhost\<distro>\<path>` UNC form works from .NET `StreamReader`, but baking the distro and user into the source per-widget is fragile.
+
+**Use `WslPaths` instead of constructing the UNC string by hand.**
+
+```csharp
+using WigiLlm.Shared;
+
+// Distro from WSL_DISTRO env, fallback "Ubuntu":
+string p1 = WslPaths.ToWindowsPath("/dev/shm/foo.json");
+// → \\wsl.localhost\Ubuntu\dev\shm\foo.json
+
+// Override distro per call:
+string p2 = WslPaths.ToWindowsPath("/etc/hosts", "Debian");
+
+// Resolve a path under user home (resolution order: WSL_USER_HOME env →
+// WSL_USER env → lowercased Windows username → "/home/user"):
+string p3 = WslPaths.UnderHome(".claude/projects");
+// → \\wsl.localhost\Ubuntu\home\<user>\.claude\projects
+```
+
+| Env var | Default | What it sets |
+|---|---|---|
+| `WSL_DISTRO` | `Ubuntu` | Distro name |
+| `WSL_USER_HOME` | _(see fallback)_ | Full WSL home path, e.g. `/home/foo` |
+| `WSL_USER` | _(see fallback)_ | Username only — builds `/home/<name>` if `WSL_USER_HOME` unset |
+
+**Resolution-order fallback for `UserHome`**: if neither env var is set, `WslPaths` lowercases `Environment.UserName` and prepends `/home/` — works when WSL Linux user matches Windows user (the common case). Hard fallback is `/home/user`.
+
+**C# 5 quirk**: `const string FOO = WslPaths.ToWindowsPath(...)` does NOT compile (`const` requires a compile-time constant; method calls aren't allowed). Use `static readonly string FOO = WslPaths.ToWindowsPath(...)` instead. Behaviorally equivalent, computed once at type init.
+
+---
+
+## Importing 3rd-party widgets — what to expect
+
+Several widgets in this repo (ContextMonitor, ControlPanel, MCPHealth, IntegrationHealth, RESTBridge, LLMStatus, MCPNeuralPulse) were imported from outside this codebase — older personal scratch dirs, parallel ClaudeCodeWidgets project. **Treat every imported widget as suspect until you've actually built it.** Things found this session:
+
+### Structurally broken on import
+
+`ContextMonitorWidget` had **two `ContextMonitorWidgetServer` classes and two `ContextMonitorWidgetInstance` classes** living in different namespaces (`ClaudeCodeWidgets` vs `ClaudeCodeWidgets.ContextMonitor`). Neither half had a complete `IWidgetObject` impl with the metadata properties the framework reads. Would have built but never loaded in WigiDash. Fix: pick one namespace, delete the duplicates, ensure exactly one type implements `IWidgetObject` with all required properties.
+
+### csproj `<Compile Include="">` paths break on flatten
+
+ClaudeCodeWidgets project laid out as:
+```
+ClaudeCodeWidgets.csproj
+ContextMonitor/WidgetBase.cs
+ContextMonitor/WidgetInstance.cs
+```
+csproj entries were `<Compile Include="ContextMonitor\WidgetBase.cs" />`. Flattening to per-widget dirs (wigi-llm convention) breaks the path. Fix: rewrite each `Include=` to drop the prefix — `<Compile Include="WidgetBase.cs" />`.
+
+### Orphan WPF references
+
+`LLMStatusWidget.csproj` referenced `SettingsUserControl.xaml` as a `<Page>` but only `.xaml.cs` was imported (no `.xaml`). `InitializeComponent()` was unresolvable. Two options: author the missing XAML, or delete the orphan and make `GetSettingsControl()` return null (matches the launcher widgets — most widgets don't need settings).
+
+### TF / LangVer drift
+
+Imported widgets variously target `v4.7.2` or `v4.8`, `LangVersion 5` or unset. **Standardize to `v4.7.2` / `LangVersion 5`** to match the rest of the repo. Unset LangVer compiles against whatever the build env defaults to today, and breaks subtly when that default shifts.
+
+### Hardcoded user paths everywhere
+
+`/home/<original-author>/...`, `C:\Users\<author>\...`, personal domains as default values, hardcoded WSL distro names. `WslPaths` covers most of these now. For any path you can't centralize, document it as "configure for your environment" and put it behind a settings property or env var.
+
+### Build before believing
+
+Every imported widget was claimed to "work" by its original author. ContextMonitor would have crashed on first load. LLMStatus would have failed at first compile. Assume nothing — stage to `%TEMP%`, run `cmd.exe /c build.bat`, read the actual exit code and warnings.
+
+---
+
+## Pre-publish hygiene — what to scrub before pushing public
+
+The repo is public (https://github.com/Platano78/wigi-llm). Before pushing widgets that came from personal workspaces:
+
+| Surface | Common leak | Fix |
+|---|---|---|
+| `Author` property in `WidgetBase.cs` | Author's personal name | Set to project name (`"WigiDash"`) |
+| `Website` property | Forked-from URL | Point to canonical repo |
+| `deploy.bat` | Hardcoded `C:\Users\<author>\...`, `bin\Debug` | `%APPDATA%\G.SKILL\WigiDashManager\Widgets\<GUID>` + `bin\Release` (BrainMonitor pattern) |
+| Source `/home/<author>/...` | Hardcoded paths | `WslPaths.UnderHome(rel)` |
+| Hardcoded WSL distro `Ubuntu` | Won't work on `Debian` etc | `WslPaths.ToWindowsPath(...)` (uses `WSL_DISTRO`) |
+| Default values for `_publicUrl`, `_apiKey`, etc | Personal domain names baked as defaults | Use neutral placeholder (`"--"`) or empty string |
+| `Background.png` etc | `C:\Users\<author>\Desktop\...` | `%USERPROFILE%\Pictures\` or bundle the asset in the widget dir |
+| AssemblyInfo.cs `[assembly: AssemblyCompany]` | Personal name | Project / org name |
+
+Quick scan command before push:
+
+```bash
+git ls-files | xargs grep -l -i "<author-name>\|c:\\\\users\\\\\|/home/<author>" 2>/dev/null
+```
+
+---
+
+## Two-agent parallelism (pi + general-purpose)
+
+When you have substantial code-gen + cross-cutting hygiene work that doesn't share files, run them in parallel:
+
+- **fork-pi against `general-qwen36-35b`** for new file generation (200+ LoC, dual-thread orchestration, etc). Spec it with a heredoc so quoting doesn't trip the shell. Always include the strip-down flags (`--no-extensions --no-skills --no-context-files --offline`). Always run the orphan reaper first.
+- **General-purpose subagent** for normalization passes (TF/LangVer cleanup, C# 6→5 conversion, build verification across N widgets). Give it explicit "DO NOT TOUCH" widget lists for files pi is writing.
+
+This session did exactly this: pi built MCPPulseWidget (1 widget, 2098 LoC, 4 commits) while general-purpose normalized 4 separate widgets (5 commits including a shared helper). Zero merge conflicts because the touched-file sets were disjoint.
+
+**Spec each agent with stop conditions and verification requirements.** Don't trust any agent's "build verified" claim without seeing the actual msbuild exit code yourself.
+
+---
+
+## fork-pi reliability — what we learned
+
+Pi against `general-qwen36-35b` shipped two widgets this session, ~3380 LoC total. Patterns observed:
+
+### Pi will hallucinate "build verified"
+
+On the first run (NeuralNexus), pi produced a written summary claiming `"Build verified: msbuild Release → 24KB DLL, exit code 0"` despite never having msbuild access in WSL. The DLL didn't exist. On the second run (MCPPulse), the spec explicitly said `"VERIFY exit code 0 and DLL output. If the build fails, fix the errors and rebuild. Do NOT claim 'build verified' without actually running msbuild and seeing exit code 0"` — and pi did real msbuild, real deploy, real numbers that all matched verification.
+
+**Rule**: include explicit verification-with-evidence language in every fork-pi spec, AND verify yourself afterward.
+
+### Pi can produce build-clean C# 5 code on first shot
+
+Both widgets compiled clean with zero errors and zero warnings on first build, despite C# 5's tight constraints. Spec must enumerate the forbidden constructs (no string interpolation, no expression-bodied members, no `out var`, no auto-property initializers, no `volatile double`, etc.) — pi respects the list when it's explicit.
+
+### Pi follows file-write order from the spec
+
+The MCPPulse spec listed files in order (csproj first, then GraphModel, then OrbitalEngine, then ActivityLog, then WidgetInstance, then Widget.cs). Pi produced them in exactly that order, visible via mtime stamps. Useful for catching mid-run progress: if file 3 of 6 has landed, pi is in the implementation phase, not stuck in discovery.
+
+### Pi's stdout is fully buffered
+
+The bg log file stays at 0 bytes for the entire run; it only flushes when pi exits. Don't read the bg log for progress — read the session JSONL at `~/.pi/agent/sessions/--<repo-path>--/<timestamp>.jsonl` instead. JSONL line count + size give a real-time signal.
+
+### Heredoc spec files for non-trivial prompts
+
+Pi's spec for both widgets was 75-155 lines, contained backticks, code samples, JSON examples. Inline as a single argv would have been mauled by the bash double-eval. Pattern:
+
+```bash
+cat > /tmp/pi-spec.txt <<'EOFSPEC'
+... full spec, single-quoted heredoc disables shell expansion ...
+EOFSPEC
+SPEC=$(cat /tmp/pi-spec.txt)
+pi --print --provider llama --model general-qwen36-35b \
+   --tools read,bash,edit,write \
+   --no-extensions --no-skills --no-context-files --offline \
+   "$SPEC" > /tmp/pi.log 2>&1
+```
+
+Always run the orphan reaper before dispatch. Always check the pi process state after dispatch — both for the discovery-hang and post-completion-linger bugs documented in the fork-pi skill.
 
 ---
 
 ## Final note
 
-**Always build and deploy and visually verify before declaring a feature done.** Type-checks pass on illegal `volatile double`. Pi reports `was_truncated: false` on truncated output. The actual touchscreen + actual router + actual user-tap is the only ground truth.
+**Always build and deploy and visually verify before declaring a feature done.** Type-checks pass on illegal `volatile double`. Pi reports `was_truncated: false` on truncated output. Pi will hallucinate "build verified" if the spec doesn't pin it down. The actual touchscreen + actual router + actual user-tap is the only ground truth.
