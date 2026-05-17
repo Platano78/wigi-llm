@@ -223,7 +223,7 @@ A growing collection of C# widgets sharing common helpers (`GpuInfo.cs`, `WslPat
 | Widget | Purpose |
 |--------|---------|
 | **MCP Pulse** | Live MCP server topology + tool-call activity visualization. Polls the MCP gateway `/health` for server-state nodes, tails `mcp.log` for activity beams. Three render modes via double-tap: full / topology-only / activity-only |
-| **Context Monitor** | Claude Code token-budget watcher. Reads JSONL session files from `~/.claude/projects/`, computes burn rate and time-until-reset across multiple sessions, weekly aggregation included |
+| **Context Monitor** | Claude Code context watcher across all live sessions. Reads per-session statusline files from `/dev/shm/claude_statusline_*.json` for context %, filters sessions inactive for >10 min, sorts by most-recent activity. Top-right shows your Anthropic 5h/7d subscription quota (`/dev/shm/claude_usage_cache.json`) with reset countdown — same data `ccstatusline` reads. Animated procedural pixel mascot whose mood tracks the top session's tier (calm / busy / alarm). Three animation intensities via `CC_ANIMATION_INTENSITY` env var. |
 | **Integration Health** | Service health for a stack of HTTP/WSL services with start/stop/restart actions. Configurable PowerShell trigger script |
 | **Control Panel** | Quick-action button grid for git / build / test / deploy commands. Configurable shell-out per button |
 
@@ -236,7 +236,7 @@ A growing collection of C# widgets sharing common helpers (`GpuInfo.cs`, `WslPat
 **Shared helpers — `wigidash/src/Shared/`:**
 
 - **`GpuInfo.cs`** — VRAM detection. Local mode shells out to `nvidia-smi.exe`; remote mode HTTP-queries `gpu-vram-server.py`. Thread-safe with a 5s cache.
-- **`WslPaths.cs`** — translates WSL POSIX paths to Windows UNC form (`\\wsl.localhost\<distro>\...`). Configurable per-environment via env vars (see below).
+- **`WslPaths.cs`** — translates WSL POSIX paths to Windows UNC form (`\\wsl.localhost\<distro>\...`). Configurable per-environment via env vars (see below). If env vars are unset and the lowercased Windows username doesn't match an existing WSL home dir, it probes `\\wsl.localhost\<distro>\home\` and picks the first real user directory. Strips embedded quote chars from env var values (works around `setx` quoting).
 
 ### Per-environment configuration
 
@@ -245,10 +245,13 @@ The widgets that read files from WSL (Context Monitor, MCP Pulse, Integration He
 | Env var | Default | What it sets |
 |---|---|---|
 | `WSL_DISTRO` | `Ubuntu` | Distro name in the UNC path |
-| `WSL_USER_HOME` | _(see below)_ | Full WSL home path, e.g. `/home/foo` |
+| `WSL_USER_HOME` | _(see below)_ | Full WSL home path, e.g. `/home/foo`. Use PowerShell's `[Environment]::SetEnvironmentVariable(...)` instead of `setx` — `setx` embeds literal quote chars into the value (the widget defensively strips them, but cleaner to avoid). |
 | `WSL_USER` | _(see below)_ | Username only — builds `/home/<name>` if `WSL_USER_HOME` unset |
+| `CC_ANIMATION_INTENSITY` | `adaptive` | Context Monitor only. `subtle` = restrained motion everywhere; `bold` = pronounced motion at all tiers; `adaptive` = quiet at calm, bold at busy/alarm. |
 
-If neither `WSL_USER_HOME` nor `WSL_USER` is set, `WslPaths` falls back to lowercased Windows username (`Environment.UserName`) — works when your WSL Linux user matches your Windows user. Otherwise set one of the env vars above.
+Resolution order for the WSL user-home path: `WSL_USER_HOME` → `WSL_USER` → lowercased `Environment.UserName` (verified to exist) → first real directory under `\\wsl.localhost\<distro>\home\`. This last step means the widget usually Just Works without any env var set, even when your WSL username differs from your Windows username.
+
+Env vars are read from the registry at process start, which means **Explorer.exe needs to have inherited the new value before launching WigiDash Manager**. If Explorer was running when you set the var, log out / log back in (or restart Explorer) so WigiDash picks it up.
 
 For the development gotchas list (build flow, threading rules, .NET 4.7.2 / LangVersion 5 limits), see [`docs/wigidash-development-learnings.md`](docs/wigidash-development-learnings.md).
 
