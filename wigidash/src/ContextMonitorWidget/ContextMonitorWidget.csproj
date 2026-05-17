@@ -56,6 +56,8 @@
   <ItemGroup>
     <Compile Include="WidgetBase.cs" />
     <Compile Include="ContextMonitorWidgetInstance.cs" />
+    <Compile Include="ContextMonitorWidgetInstance.Render.cs" />
+    <Compile Include="ContextMonitorWidgetInstance.Sessions.cs" />
     <Compile Include="JSONLSessionParser.cs" />
     <Compile Include="BurnRateCalculator.cs" />
     <Compile Include="MultiSessionTracker.cs" />

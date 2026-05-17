@@ -22,8 +22,24 @@ namespace ClaudeCodeWidgets.ContextMonitor
     public class WeeklyUsageAggregator
     {
         private static readonly string BasePath = WslPaths.UnderHome(".claude/projects");
-        private const decimal DefaultWeeklyLimit = 100.00m;
+        private const decimal FallbackWeeklyLimit = 100.00m;
         private string _logFile = @"C:\temp\widget_debug.txt";
+
+        private static decimal ResolveWeeklyLimit()
+        {
+            try
+            {
+                string env = Environment.GetEnvironmentVariable("CC_WEEKLY_LIMIT");
+                if (!string.IsNullOrEmpty(env))
+                {
+                    decimal v;
+                    if (decimal.TryParse(env, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out v) && v > 0)
+                        return v;
+                }
+            }
+            catch { }
+            return FallbackWeeklyLimit;
+        }
 
         private void LogDebug(string message)
         {
@@ -48,7 +64,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
             return new WeeklyUsage
             {
                 TotalSpent = totalCost,
-                WeeklyLimit = DefaultWeeklyLimit,
+                WeeklyLimit = ResolveWeeklyLimit(),
                 TimeUntilReset = timeUntilReset,
                 WeekStartDate = weekStart
             };

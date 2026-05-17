@@ -68,12 +68,40 @@ namespace WigiLlm.Shared
                     string winUser = Environment.UserName;
                     if (!string.IsNullOrEmpty(winUser))
                     {
-                        return "/home/" + winUser.ToLowerInvariant();
+                        string candidate = "/home/" + winUser.ToLowerInvariant();
+                        if (WslDirectoryExists(candidate)) return candidate;
                     }
+                    string discovered = DiscoverFirstWslHome();
+                    if (!string.IsNullOrEmpty(discovered)) return discovered;
                 }
                 catch { }
                 return "/home/user";
             }
+        }
+
+        private static bool WslDirectoryExists(string wslAbsPath)
+        {
+            try { return System.IO.Directory.Exists(ToWindowsPath(wslAbsPath)); }
+            catch { return false; }
+        }
+
+        private static string DiscoverFirstWslHome()
+        {
+            try
+            {
+                string homeWin = ToWindowsPath("/home");
+                if (!System.IO.Directory.Exists(homeWin)) return null;
+                string[] dirs = System.IO.Directory.GetDirectories(homeWin);
+                foreach (string d in dirs)
+                {
+                    string name = System.IO.Path.GetFileName(d);
+                    if (string.IsNullOrEmpty(name)) continue;
+                    if (name.StartsWith(".") || name == "lost+found") continue;
+                    return "/home/" + name;
+                }
+            }
+            catch { }
+            return null;
         }
 
         /// <summary>

@@ -1,13 +1,14 @@
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Threading;
 using WigiDashWidgetFramework;
 using WigiDashWidgetFramework.WidgetUtility;
 
 namespace ClaudeCodeWidgets.ContextMonitor
 {
-    public class ContextMonitorWidgetInstance : IWidgetInstance
+    public partial class ContextMonitorWidgetInstance : IWidgetInstance
     {
         public IWidgetObject WidgetObject { get; set; }
         public Guid Guid { get; set; }
@@ -17,10 +18,18 @@ namespace ClaudeCodeWidgets.ContextMonitor
         public Bitmap BitmapCurrent;
         private string _resourcePath;
         private readonly Mutex _drawingMutex = new Mutex();
-        private const int MutexTimeout = 100;
+        private const int MutexTimeout = 500;
 
         private Thread _updateThread;
         private volatile bool _isRunning = false;
+
+        private StatusLineReader _statusLineReader;
+        private WeeklyUsageAggregator _weeklyAggregator;
+        private DateTime _lastWeeklyRefresh = DateTime.MinValue;
+        private WeeklyUsage _weeklyCache;
+        private static readonly TimeSpan WeeklyRefreshInterval = TimeSpan.FromMinutes(2);
+
+        private string _logFile = @"C:\temp\widget_debug.txt";
 
         public ContextMonitorWidgetInstance(IWidgetObject parent, WidgetSize widget_size, Guid instance_guid, string resource_path)
         {
@@ -28,12 +37,35 @@ namespace ClaudeCodeWidgets.ContextMonitor
             WidgetSize = widget_size;
             Guid = instance_guid;
             _resourcePath = resource_path;
+
             Size size = widget_size.ToSize();
             int w = size.Width > 0 ? size.Width : 192;
             int h = size.Height > 0 ? size.Height : 192;
             BitmapCurrent = new Bitmap(w, h, PixelFormat.Format16bppRgb565);
-            try { DrawFrame(); } catch { }
-            try { StartUpdateLoop(); } catch { }
+
+            try
+            {
+                LogDebug("Initializing Context Monitor multi-session v4");
+                _statusLineReader = new StatusLineReader();
+                _weeklyAggregator = new WeeklyUsageAggregator();
+                LogDebug("Init complete (" + w + "x" + h + ")");
+            }
+            catch (Exception ex)
+            {
+                LogDebug("Init error: " + ex.Message);
+            }
+
+            try { DrawFrame(); } catch (Exception ex) { LogDebug("Initial draw: " + ex.Message); }
+            try { StartUpdateLoop(); } catch (Exception ex) { LogDebug("StartLoop: " + ex.Message); }
+        }
+
+        private void LogDebug(string message)
+        {
+            try
+            {
+                File.AppendAllText(_logFile, "[" + DateTime.Now.ToString("HH:mm:ss") + "] CTX: " + message + "\n");
+            }
+            catch { }
         }
 
         private void StartUpdateLoop()
@@ -52,38 +84,12 @@ namespace ClaudeCodeWidgets.ContextMonitor
                 {
                     if (_drawingMutex.WaitOne(MutexTimeout))
                     {
-                        try
-                        {
-                            DrawFrame();
-                            RaiseWidgetUpdated();
-                        }
-                        finally
-                        {
-                            try { _drawingMutex.ReleaseMutex(); } catch { }
-                        }
+                        try { DrawFrame(); RaiseWidgetUpdated(); }
+                        finally { try { _drawingMutex.ReleaseMutex(); } catch { } }
                     }
                 }
-                catch { }
+                catch (Exception ex) { LogDebug("UpdateLoop: " + ex.Message); }
                 Thread.Sleep(2000);
-            }
-        }
-
-        private void DrawFrame()
-        {
-            if (BitmapCurrent == null) return;
-            using (Graphics g = Graphics.FromImage(BitmapCurrent))
-            {
-                g.Clear(Color.Black);
-                using (Font headerFont = new Font("Arial", 8, FontStyle.Bold))
-                {
-                    g.DrawString("Context Monitor", headerFont, Brushes.White, 2, 2);
-                }
-                using (Font subFont = new Font("Arial", 7))
-                {
-                    g.DrawString("Token Usage", subFont, Brushes.Gray, 2, 15);
-                }
-                int barWidth = (int)(BitmapCurrent.Width * 0.7);
-                g.FillRectangle(Brushes.Green, 2, 30, barWidth, 10);
             }
         }
 
@@ -121,7 +127,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
 
         public void EnterSleep() { _isRunning = false; }
         public void ExitSleep() { if (!_isRunning) StartUpdateLoop(); }
-        public void UpdateSettings() { }
+        public void UpdateSettings() { RequestUpdate(); }
         public void SaveSettings() { }
         public void LoadSettings() { }
 

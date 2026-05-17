@@ -130,10 +130,13 @@ namespace ClaudeCodeWidgets.ContextMonitor
                     }
                 }
 
-                // Sort by context usage (highest first)
+                // Hide sessions with no activity in the last 10 minutes.
+                DateTime staleCutoff = DateTime.Now.Subtract(TimeSpan.FromMinutes(10));
                 result.Sessions = result.Sessions
-                    .OrderByDescending(s => s.Session.UsagePercentage)
+                    .Where(s => s.Session != null && s.Session.Timestamp >= staleCutoff)
+                    .OrderByDescending(s => s.Session.Timestamp)
                     .ToList();
+                LogDebug("After stale filter: " + result.Sessions.Count + " active sessions");
             }
             catch (Exception ex)
             {
