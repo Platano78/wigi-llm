@@ -58,25 +58,45 @@ namespace WigiLlm.Shared
                     string envFull = Environment.GetEnvironmentVariable(UserHomeEnvVar);
                     if (!string.IsNullOrEmpty(envFull))
                     {
-                        return envFull;
+                        envFull = envFull.Trim().Trim('"').Trim('\'').Trim();
+                        if (!string.IsNullOrEmpty(envFull))
+                        {
+                            LogPathDebug("UserHome: WSL_USER_HOME=" + envFull);
+                            return envFull;
+                        }
                     }
                     string envUser = Environment.GetEnvironmentVariable(UserEnvVar);
                     if (!string.IsNullOrEmpty(envUser))
                     {
-                        return "/home/" + envUser;
+                        envUser = envUser.Trim().Trim('"').Trim('\'').Trim();
+                        if (!string.IsNullOrEmpty(envUser))
+                        {
+                            LogPathDebug("UserHome: WSL_USER=" + envUser);
+                            return "/home/" + envUser;
+                        }
                     }
                     string winUser = Environment.UserName;
                     if (!string.IsNullOrEmpty(winUser))
                     {
                         string candidate = "/home/" + winUser.ToLowerInvariant();
-                        if (WslDirectoryExists(candidate)) return candidate;
+                        bool exists = WslDirectoryExists(candidate);
+                        LogPathDebug("UserHome: try winUser=" + winUser + " candidate=" + candidate + " exists=" + exists);
+                        if (exists) return candidate;
                     }
                     string discovered = DiscoverFirstWslHome();
+                    LogPathDebug("UserHome: DiscoverFirstWslHome=" + (discovered ?? "(null)"));
                     if (!string.IsNullOrEmpty(discovered)) return discovered;
                 }
-                catch { }
+                catch (Exception ex) { LogPathDebug("UserHome: EXCEPTION " + ex.Message); }
+                LogPathDebug("UserHome: fallback /home/user");
                 return "/home/user";
             }
+        }
+
+        private static void LogPathDebug(string msg)
+        {
+            try { System.IO.File.AppendAllText(@"C:\temp\widget_debug.txt", "[" + DateTime.Now.ToString("HH:mm:ss") + "] WSLPATH: " + msg + "\n"); }
+            catch { }
         }
 
         private static bool WslDirectoryExists(string wslAbsPath)

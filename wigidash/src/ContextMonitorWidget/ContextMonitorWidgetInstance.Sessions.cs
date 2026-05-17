@@ -139,6 +139,7 @@ namespace ClaudeCodeWidgets.ContextMonitor
                 {
                     g.FillRectangle(fillBrush, x + 1, barY + 1, fillWidth, barH - 2);
                 }
+                DrawBarOverlay(g, x + 1, barY + 1, fillWidth, barH - 2, TierFromPercent(pct));
             }
         }
 

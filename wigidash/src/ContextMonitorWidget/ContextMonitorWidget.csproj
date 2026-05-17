@@ -58,10 +58,14 @@
     <Compile Include="ContextMonitorWidgetInstance.cs" />
     <Compile Include="ContextMonitorWidgetInstance.Render.cs" />
     <Compile Include="ContextMonitorWidgetInstance.Sessions.cs" />
+    <Compile Include="ContextMonitorWidgetInstance.Animation.cs" />
+    <Compile Include="ContextMonitorWidgetInstance.BarOverlay.cs" />
+    <Compile Include="ContextMonitorWidgetInstance.Mascot.cs" />
     <Compile Include="JSONLSessionParser.cs" />
     <Compile Include="BurnRateCalculator.cs" />
     <Compile Include="MultiSessionTracker.cs" />
     <Compile Include="WeeklyUsageAggregator.cs" />
+    <Compile Include="UsageCacheReader.cs" />
     <Compile Include="StatusLineReader.cs" />
     <Compile Include="..\Shared\WslPaths.cs" Link="WslPaths.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

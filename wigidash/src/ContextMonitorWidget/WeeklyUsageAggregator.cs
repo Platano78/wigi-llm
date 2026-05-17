@@ -102,9 +102,10 @@ namespace ClaudeCodeWidgets.ContextMonitor
 
             try
             {
+                LogDebug("BasePath resolved to: " + BasePath);
                 if (!Directory.Exists(BasePath))
                 {
-                    LogDebug("Base path does not exist");
+                    LogDebug("Base path does not exist: " + BasePath);
                     return 0;
                 }
 

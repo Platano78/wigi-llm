@@ -24,10 +24,13 @@ namespace ClaudeCodeWidgets.ContextMonitor
         private volatile bool _isRunning = false;
 
         private StatusLineReader _statusLineReader;
-        private WeeklyUsageAggregator _weeklyAggregator;
-        private DateTime _lastWeeklyRefresh = DateTime.MinValue;
-        private WeeklyUsage _weeklyCache;
-        private static readonly TimeSpan WeeklyRefreshInterval = TimeSpan.FromMinutes(2);
+        private UsageCacheReader _usageReader;
+        private DateTime _lastUsageRefresh = DateTime.MinValue;
+        private UsageCacheData _usageCache;
+        private static readonly TimeSpan UsageRefreshInterval = TimeSpan.FromSeconds(30);
+        private DateTime _lastSessionRefresh = DateTime.MinValue;
+        private MultiSessionData _sessionCache;
+        private static readonly TimeSpan SessionRefreshInterval = TimeSpan.FromSeconds(1);
 
         private string _logFile = @"C:\temp\widget_debug.txt";
 
@@ -45,10 +48,11 @@ namespace ClaudeCodeWidgets.ContextMonitor
 
             try
             {
-                LogDebug("Initializing Context Monitor multi-session v4");
+                LogDebug("Initializing Context Monitor multi-session v5 (animated)");
                 _statusLineReader = new StatusLineReader();
-                _weeklyAggregator = new WeeklyUsageAggregator();
-                LogDebug("Init complete (" + w + "x" + h + ")");
+                _usageReader = new UsageCacheReader();
+                _animIntensity = ResolveAnimationIntensity();
+                LogDebug("Init complete (" + w + "x" + h + ") intensity=" + _animIntensity);
             }
             catch (Exception ex)
             {
@@ -89,7 +93,8 @@ namespace ClaudeCodeWidgets.ContextMonitor
                     }
                 }
                 catch (Exception ex) { LogDebug("UpdateLoop: " + ex.Message); }
-                Thread.Sleep(2000);
+                _frameCount++;
+                Thread.Sleep(FrameIntervalMs);
             }
         }
 
