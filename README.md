@@ -33,7 +33,6 @@ Architecturally a hybrid: a compiled C# widget DLL handles rendering, polling, a
 - **Health polling** — buttons show active/inactive icons based on real-time `/health` checks
 - **Remote monitoring** — poll models running on other machines across your network
 - **Kill switch** — dedicated button to unload everything and flush VRAM
-- **Router auto-start** — automatically starts llama.cpp router if it's not running
 
 **Source:** `wigidash/src/LLMLauncherWidget/` — ~2,100 lines of C# / XAML. Build with `build.bat`, deploy with `deploy.bat`.
 
