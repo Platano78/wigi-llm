@@ -16,3 +16,6 @@ Thumbs.db
 
 # Pi/dev artifacts
 /tmp/
+
+# Internal session prompts (personal paths, not for share)
+docs/next-session-prompt.md

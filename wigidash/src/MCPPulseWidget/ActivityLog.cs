@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Web.Script.Serialization;
+using WigiLlm.Shared;
 
 namespace MCPPulseWidget
 {
@@ -18,7 +19,7 @@ namespace MCPPulseWidget
     public class ActivityLog
     {
         private static readonly string McpLogPath =
-            @"\\wsl.localhost\Ubuntu\home\platano\.claude\logs\mcp.log";
+            WslPaths.UnderHome(".claude/logs/mcp.log");
 
         private long _lastLogPosition = 0;
         private readonly Queue<ActivityEvent> _eventQueue = new Queue<ActivityEvent>();
