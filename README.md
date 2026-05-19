@@ -204,7 +204,7 @@ The WigiDash runs on Windows. Model management scripts live in WSL2. The `wsl --
 
 > **Status: experimental.** These widgets compile and run, but I rarely use them in daily practice — the buttons.json launcher above covers most of what I actually need. They live here as reference implementations for anyone who wants to build custom WigiDash widgets in C#, or fork pieces of them. Don't expect the same level of polish or stability as the launcher.
 
-A growing collection of C# widgets sharing common helpers (`GpuInfo.cs`, `WslPaths.cs`). All target .NET Framework 4.7.2 with `LangVersion 5` and reference `WigiDashWidgetFramework.dll`.
+A growing collection of C# widgets sharing common helpers (`GpuInfo.cs`, `WslPaths.cs`). All target .NET Framework 4.7.2 and reference `WigiDashWidgetFramework.dll`. Most also pin `LangVersion 5` (intentional — the WigiDash framework was historically wired against the C# 5 surface, and the launcher + newer widgets stick to that for parity; a few older imported widgets use C# 6+ syntax and will be normalized over time).
 
 **LLM server management:**
 
